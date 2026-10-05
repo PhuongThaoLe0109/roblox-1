@@ -10,7 +10,7 @@ local GemConfig = {}
 -- Factions
 --------------------------------------------------------------------------------
 
-export type FactionId = "CrystalGems" | "Homeworld" | "Neutral"
+export type FactionId = "Guardians" | "Dominion" | "Neutral"
 
 export type FactionInfo = {
 	Id: FactionId,
@@ -20,22 +20,25 @@ export type FactionInfo = {
 }
 
 GemConfig.Factions = {
-	CrystalGems = {
-		Id = "CrystalGems",
-		DisplayName = "Crystal Gems",
-		Color = Color3.fromRGB(255, 120, 170),
-		TeamColor = BrickColor.new("Pink"),
+	-- Rebel defenders of the planet's surface.
+	Guardians = {
+		Id = "Guardians",
+		DisplayName = "Prism Guardians",
+		Color = Color3.fromRGB(80, 200, 255),
+		TeamColor = BrickColor.new("Cyan"),
 	},
-	Homeworld = {
-		Id = "Homeworld",
-		DisplayName = "Homeworld",
-		Color = Color3.fromRGB(255, 220, 90),
-		TeamColor = BrickColor.new("Bright yellow"),
+	-- The ruling empire that grows gems from the planet.
+	Dominion = {
+		Id = "Dominion",
+		DisplayName = "Crown Dominion",
+		Color = Color3.fromRGB(255, 185, 60),
+		TeamColor = BrickColor.new("Gold"),
 	},
+	-- Unaligned gems; cannot capture territory.
 	Neutral = {
 		Id = "Neutral",
-		DisplayName = "Off-Color",
-		Color = Color3.fromRGB(180, 180, 190),
+		DisplayName = "Rogue Shards",
+		Color = Color3.fromRGB(170, 175, 185),
 		TeamColor = BrickColor.new("Medium stone grey"),
 	},
 } :: { [string]: FactionInfo }
@@ -125,10 +128,10 @@ GemConfig.GemTypes = {
 	Pearl = {
 		Id = "Pearl",
 		DisplayName = "Pearl",
-		Color = Color3.fromRGB(240, 235, 225),
+		Color = Color3.fromRGB(235, 225, 245),
 		Material = Enum.Material.SmoothPlastic,
 		Shape = "Round",
-		DefaultPlacement = "Forehead",
+		DefaultPlacement = "Chest",
 		AllowedPlacements = { "Forehead", "Chest", "Navel", "Back" },
 		WeaponId = "EnergySpear",
 		BaseStats = { MaxHealth = 90, WalkSpeed = 20, Power = 9, Defense = 6 },
@@ -152,7 +155,7 @@ GemConfig.GemTypes = {
 		Color = Color3.fromRGB(220, 30, 50),
 		Material = Enum.Material.Glass,
 		Shape = "Faceted",
-		DefaultPlacement = "LeftHand",
+		DefaultPlacement = "Navel",
 		AllowedPlacements = { "LeftHand", "RightHand", "Navel", "Forehead" },
 		WeaponId = "PowerGauntlet",
 		BaseStats = { MaxHealth = 100, WalkSpeed = 17, Power = 12, Defense = 8 },
@@ -164,7 +167,7 @@ GemConfig.GemTypes = {
 		Color = Color3.fromRGB(40, 90, 230),
 		Material = Enum.Material.Glass,
 		Shape = "Faceted",
-		DefaultPlacement = "RightHand",
+		DefaultPlacement = "Forehead",
 		AllowedPlacements = { "LeftHand", "RightHand", "Forehead" },
 		WeaponId = "FrostGauntlet",
 		BaseStats = { MaxHealth = 85, WalkSpeed = 16, Power = 9, Defense = 9 },
@@ -188,9 +191,9 @@ GemConfig.GemTypes = {
 		Color = Color3.fromRGB(230, 120, 50),
 		Material = Enum.Material.Marble,
 		Shape = "Diamond",
-		DefaultPlacement = "Nose",
+		DefaultPlacement = "Forehead",
 		AllowedPlacements = { "Nose", "Forehead", "Chest" },
-		WeaponId = "CrashHelmet",
+		WeaponId = "RamCrest",
 		BaseStats = { MaxHealth = 150, WalkSpeed = 17, Power = 14, Defense = 11 },
 		Starter = false,
 	},
@@ -200,21 +203,21 @@ GemConfig.GemTypes = {
 		Color = Color3.fromRGB(140, 230, 60),
 		Material = Enum.Material.Glass,
 		Shape = "Diamond",
-		DefaultPlacement = "Forehead",
+		DefaultPlacement = "Chest",
 		AllowedPlacements = { "Forehead", "Chest" },
-		WeaponId = "LimbEnhancer",
+		WeaponId = "ArcDrones",
 		BaseStats = { MaxHealth = 80, WalkSpeed = 19, Power = 8, Defense = 7 },
 		Starter = true,
 	},
 	LapisLazuli = {
 		Id = "LapisLazuli",
 		DisplayName = "Lapis Lazuli",
-		Color = Color3.fromRGB(30, 60, 160),
+		Color = Color3.fromRGB(45, 95, 200),
 		Material = Enum.Material.Glass,
 		Shape = "Diamond",
-		DefaultPlacement = "Back",
+		DefaultPlacement = "Chest",
 		AllowedPlacements = { "Back", "Chest" },
-		WeaponId = "WaterWings",
+		WeaponId = "TideWings",
 		BaseStats = { MaxHealth = 110, WalkSpeed = 18, Power = 11, Defense = 8 },
 		Starter = false,
 	},
@@ -229,14 +232,20 @@ export type RankInfo = {
 	EssenceRequired: number,
 }
 
+-- One rank per island: reaching rank N unlocks the portal to island N.
 GemConfig.Ranks = {
 	{ Name = "Shard", EssenceRequired = 0 },
-	{ Name = "Rough Cut", EssenceRequired = 500 },
+	{ Name = "Chip", EssenceRequired = 150 },
+	{ Name = "Rough Cut", EssenceRequired = 400 },
+	{ Name = "Facet", EssenceRequired = 800 },
 	{ Name = "Polished", EssenceRequired = 1_500 },
-	{ Name = "Faceted", EssenceRequired = 4_000 },
-	{ Name = "Radiant", EssenceRequired = 10_000 },
-	{ Name = "Perfect", EssenceRequired = 25_000 },
-	{ Name = "Diamond Elite", EssenceRequired = 60_000 },
+	{ Name = "Gleaming", EssenceRequired = 2_500 },
+	{ Name = "Brilliant", EssenceRequired = 4_000 },
+	{ Name = "Radiant", EssenceRequired = 6_000 },
+	{ Name = "Luminous", EssenceRequired = 9_000 },
+	{ Name = "Prismatic", EssenceRequired = 13_000 },
+	{ Name = "Flawless", EssenceRequired = 18_000 },
+	{ Name = "Sovereign", EssenceRequired = 25_000 },
 } :: { RankInfo }
 
 --------------------------------------------------------------------------------
@@ -269,6 +278,9 @@ GemConfig.Attributes = {
 	Rank = "Rank",
 	RankName = "RankName",
 	CrystalEssence = "CrystalEssence",
+	LifetimeEssence = "LifetimeEssence",
+	CurrentIsland = "CurrentIsland", -- territory id, "Hub", "Home" or "" (in the sea)
+	CaptureTerritory = "CaptureTerritory", -- territory id whose capture pad the player stands on
 	WeaponId = "WeaponId",
 	OwnerUserId = "OwnerUserId",
 }
@@ -276,6 +288,7 @@ GemConfig.Attributes = {
 GemConfig.Tags = {
 	Gemstone = "Gemstone", -- the physical gem part on a character
 	GemCharacter = "GemCharacter", -- any character owned by a loaded gem player
+	Portal = "Portal", -- portal surfaces (see PortalService)
 }
 
 GemConfig.GemstoneName = "Gemstone"

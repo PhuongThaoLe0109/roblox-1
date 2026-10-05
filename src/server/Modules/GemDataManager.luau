@@ -57,7 +57,7 @@ export type PlayerData = {
 	Stats: {
 		TimesPuffed: number,
 		PuffsInflicted: number,
-		GemsBubbled: number,
+		GemsSealed: number,
 		TerritoriesCaptured: number,
 		Fusions: number,
 	},
@@ -148,7 +148,7 @@ local function createDefaultData(userId: number): PlayerData
 		Stats = {
 			TimesPuffed = 0,
 			PuffsInflicted = 0,
-			GemsBubbled = 0,
+			GemsSealed = 0,
 			TerritoriesCaptured = 0,
 			Fusions = 0,
 		},
@@ -450,6 +450,7 @@ local function replicate(profile: Profile)
 	player:SetAttribute(ATTR.Rank, data.Rank)
 	player:SetAttribute(ATTR.RankName, rankInfo and rankInfo.Name or "?")
 	player:SetAttribute(ATTR.CrystalEssence, data.CrystalEssence)
+	player:SetAttribute(ATTR.LifetimeEssence, data.LifetimeEssence)
 	player:SetAttribute(ATTR.WeaponId, GemConfig.GemTypes[data.GemType].WeaponId)
 
 	local character = player.Character
@@ -641,7 +642,7 @@ end
 
 function GemDataManager.AreAllies(a: Player, b: Player): boolean
 	local fa, fb = GemDataManager.GetFaction(a), GemDataManager.GetFaction(b)
-	-- Neutral (Off-Color) gems have no allies.
+	-- Neutral (Rogue Shards) gems have no allies.
 	return fa ~= nil and fa == fb and fa ~= "Neutral"
 end
 
