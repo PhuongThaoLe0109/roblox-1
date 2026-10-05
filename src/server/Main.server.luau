@@ -16,8 +16,10 @@ local Modules = script.Parent:WaitForChild("Modules")
 local PlayerData = require(Modules:WaitForChild("PlayerData"))
 local RollService = require(Modules:WaitForChild("RollService"))
 local Remotes = require(Modules:WaitForChild("Remotes"))
+local MovementService = require(Modules:WaitForChild("MovementService"))
 
 RollService.Init()
+MovementService.Init()
 
 -- Placeholder until the arena/combat system lands: the Play button works but
 -- the arena isn't open yet.
