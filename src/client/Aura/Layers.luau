@@ -894,137 +894,198 @@ function Layers.Diadem(ctx: Context, spec): Update
 	end
 end
 
--- The transformation: a giant translucent crystal sovereign rising behind the
--- wearer, mirroring their facing, with glowing eyes, a chest gem, great
--- pauldrons and a crystalline crest.
+-- The transformation: a giant ethereal crystal sovereign rising behind the
+-- wearer. Sculpted from rounded forms: a flowing gown that ripples, a slender
+-- torso with crystal pauldrons, long arms with hands that gesture slowly, a
+-- gem set in the chest, a face with glowing eyes and a crest (towering spire,
+-- billowing bloom or crystal halo crown). It breathes, sways, looks around,
+-- and fades out whenever it would block its owner's camera.
 -- { Scale, Variant ("Spire" | "Bloom" | "Halo"), Behind }
 function Layers.Colossus(ctx: Context, spec): Update
 	local S = spec.Scale or 3
-	local behind = spec.Behind or S * 1.5
+	local behind = spec.Behind or S * 2
 	local variant = spec.Variant or "Spire"
-	local body = lerp(ctx.Color, WHITE, 0.15)
-	local glassT = 0.55
-	type Piece = { Part: BasePart, Offset: CFrame, Group: string }
+	local skin = lerp(ctx.Color, WHITE, 0.35)
+	local robe = lerp(ctx.Color, ctx.Accent, 0.35)
+	local SKIN_T = 0.3
+	local ROBE_T = 0.38
+	type Piece = { Part: BasePart, Offset: CFrame, Group: string, Ripple: number? }
 	local pieces: { Piece } = {}
-	local function add(p: BasePart, offset: CFrame, group: string?)
-		table.insert(pieces, { Part = p, Offset = offset, Group = group or "Body" })
-	end
-	local function glass(size: Vector3, color: Color3?): Part
-		return part(ctx, size, color or body, Enum.Material.Glass, glassT)
-	end
-
-	-- Gown: a tall faceted skirt, wider at the hem.
-	add(glass(Vector3.new(S * 2.4, S * 2.4, S * 1.5)), CFrame.new(0, S * 1.2, 0))
-	add(glass(Vector3.new(S * 1.7, S * 1.7, S * 1.7), ctx.Accent), CFrame.new(0, S * 0.6, 0) * CFrame.Angles(0, math.rad(45), 0))
-	-- Torso and waist
-	add(glass(Vector3.new(S * 1.5, S * 1.5, S * 0.9)), CFrame.new(0, S * 3.1, 0))
-	add(glass(Vector3.new(S * 1.0, S * 0.5, S * 0.8), ctx.Accent), CFrame.new(0, S * 2.4, 0))
-	-- Chest gem
-	local chestShell, chestCore = gemPair(ctx, S * 0.5, ctx.Color)
-	chestShell.Transparency = 0.25
-	add(chestShell, CFrame.new(0, S * 3.2, -S * 0.5) * GEM_TILT)
-	add(chestCore, CFrame.new(0, S * 3.2, -S * 0.5) * GEM_TILT)
-	-- Pauldrons: fans of great shards on each shoulder.
-	for side = -1, 1, 2 do
-		for k = 1, 3 do
-			local length = S * (0.9 + k * 0.3)
-			local tilt = CFrame.Angles(math.rad(8 * k), 0, -side * math.rad(12 + k * 14))
-			add(part(ctx, Vector3.new(S * 0.4, length, S * 0.4), if k == 2 then ctx.Accent else ctx.Color, Enum.Material.Glass, 0.35), CFrame.new(side * S * (0.6 + k * 0.12), S * 3.75, S * 0.1 * k) * tilt * CFrame.new(0, length / 2, 0) * CFrame.Angles(0, math.rad(45), 0))
-		end
-		-- Arms (animated)
-		add(glass(Vector3.new(S * 0.42, S * 1.5, S * 0.42)), CFrame.new(0, -S * 0.75, 0), if side < 0 then "LeftArm" else "RightArm")
-		add(glass(Vector3.new(S * 0.36, S * 1.3, S * 0.36)), CFrame.new(0, -S * 2.05, -S * 0.25) * CFrame.Angles(math.rad(-20), 0, 0), if side < 0 then "LeftArm" else "RightArm")
-		add(part(ctx, Vector3.new(S * 0.3, S * 0.3, S * 0.3), lerp(ctx.Accent, WHITE, 0.4)), CFrame.new(0, -S * 2.8, -S * 0.5) * GEM_TILT, if side < 0 then "LeftArm" else "RightArm")
-	end
-	-- Neck and head: a cut-gem face.
-	add(glass(Vector3.new(S * 0.4, S * 0.5, S * 0.4)), CFrame.new(0, S * 4.0, 0))
-	add(glass(Vector3.new(S * 0.95, S * 1.1, S * 0.95)), CFrame.Angles(0, math.rad(45), 0), "Head")
-	for side = -1, 1, 2 do
-		add(part(ctx, Vector3.new(S * 0.2, S * 0.09, S * 0.05), WHITE), CFrame.new(side * S * 0.22, S * 0.08, -S * 0.66), "Head")
-	end
-	-- Crest
-	if variant == "Bloom" then
-		local puff = part(ctx, Vector3.one * S * 1.7, ctx.Accent, Enum.Material.Glass, 0.45)
-		puff.Shape = Enum.PartType.Ball
-		add(puff, CFrame.new(0, S * 0.45, S * 0.55), "Head")
-		for side = -1, 1, 2 do
-			local small = part(ctx, Vector3.one * S * 0.9, ctx.Color, Enum.Material.Glass, 0.45)
-			small.Shape = Enum.PartType.Ball
-			add(small, CFrame.new(side * S * 0.8, S * 0.1, S * 0.4), "Head")
-		end
-	else
-		local n = if variant == "Halo" then 7 else 5
-		for k = 1, n do
-			local u = (k - 1) / (n - 1) - 0.5
-			local length = S * (if variant == "Halo" then 1.1 else 1.9) * (1 - math.abs(u) * 0.7)
-			local lean = if variant == "Halo" then CFrame.Angles(0, 0, -u * 2.6) else CFrame.Angles(math.rad(20), 0, -u * 1.2)
-			add(part(ctx, Vector3.new(S * 0.32, length, S * 0.32), grad(ctx, 0.3 + math.abs(u)), Enum.Material.Glass, 0.3), CFrame.new(0, S * 0.45, S * 0.3) * lean * CFrame.new(0, length / 2, 0) * CFrame.Angles(0, math.rad(45), 0), "Head")
-		end
-	end
-	-- Light halo behind the head.
-	local h = host(ctx)
-	ribbon(ctx, h, circle(S * 1.25, 36), S * 0.12, function(u)
-		return grad(ctx, 0.2 + 0.7 * (0.5 + 0.5 * math.sin(u * TAU * 3)))
-	end, 0.2)
-	-- Silhouette glow.
-	local outline = Instance.new("Highlight")
-	outline.FillColor = ctx.Color
-	outline.FillTransparency = 0.7
-	outline.OutlineColor = lerp(ctx.Accent, WHITE, 0.4)
-	outline.OutlineTransparency = 0.1
-	outline.DepthMode = Enum.HighlightDepthMode.Occluded
-	outline.Parent = ctx.Parent
-
-	-- Collect the colossus parts into their own model so the highlight wraps
-	-- only them.
 	local model = Instance.new("Model")
 	model.Name = "Colossus"
 	model.Parent = ctx.Parent
-	for _, piece in pieces do
-		piece.Part.Parent = model
+	local function make(size: Vector3, color: Color3, material: Enum.Material, transparency: number, shape: Enum.PartType?): Part
+		local p = part(ctx, size, color, material, transparency)
+		if shape then
+			p.Shape = shape
+		end
+		p.Parent = model
+		return p
 	end
+	local function add(p: BasePart, offset: CFrame, group: string?, ripple: number?)
+		table.insert(pieces, { Part = p, Offset = offset, Group = group or "Body", Ripple = ripple })
+	end
+	local function sphere(group: string, at: Vector3, r: number, color: Color3, material: Enum.Material?, transparency: number?)
+		add(make(Vector3.one * r * 2 * S, color, material or Enum.Material.SmoothPlastic, transparency or SKIN_T, Enum.PartType.Ball), CFrame.new(at * S), group)
+	end
+	local function capsule(group: string, a: Vector3, b: Vector3, r1: number, r2: number, color: Color3, transparency: number?)
+		sphere(group, a, r1, color, nil, transparency)
+		sphere(group, b, r2, color, nil, transparency)
+		local length = (b - a).Magnitude
+		if length > 0.01 then
+			local mid = (a + b) / 2 * S
+			local dir = (b - a).Unit
+			local up = if math.abs(dir.Y) > 0.98 then Vector3.new(0, 0, -1) else Vector3.yAxis
+			local cf = CFrame.lookAt(mid, mid + dir, up) * CFrame.Angles(0, math.rad(90), 0)
+			add(make(Vector3.new(length * S, (r1 + r2) * S, (r1 + r2) * S), color, Enum.Material.SmoothPlastic, transparency or SKIN_T, Enum.PartType.Cylinder), cf, group)
+		end
+	end
+	local function crystal(group: string, base: Vector3, tip: Vector3, width: number, color: Color3)
+		local length = (tip - base).Magnitude
+		local dir = (tip - base).Unit
+		local up = if math.abs(dir.Y) > 0.98 then Vector3.new(0, 0, -1) else Vector3.yAxis
+		local cf = CFrame.lookAt(base * S, (base + dir) * S, up) * CFrame.Angles(math.rad(-90), 0, 0) * CFrame.new(0, length * S / 2, 0) * CFrame.Angles(0, math.rad(45), 0)
+		add(make(Vector3.new(width * S, length * S, width * S), color, Enum.Material.Glass, 0.2), cf, group)
+		add(make(Vector3.new(width * 0.4 * S, length * 0.85 * S, width * 0.4 * S), WHITE, Enum.Material.Neon, 0.1), cf, group)
+	end
+
+	-- Gown: tiers of discs flaring to the hem, each rippling on its own.
+	local tiers = 11
+	for i = 0, tiers - 1 do
+		local u = i / (tiers - 1)
+		local y = 0.18 + u * 2.25
+		local r = 1.55 - u * 1.0 + math.sin(u * math.pi) * 0.1
+		local disc = make(Vector3.new(0.34 * S, r * 2 * S, r * 2 * S), if i % 2 == 0 then robe else lerp(robe, skin, 0.3), Enum.Material.SmoothPlastic, ROBE_T, Enum.PartType.Cylinder)
+		add(disc, CFrame.new(0, y * S, 0) * CFrame.Angles(0, 0, math.rad(90)), "Body", (1 - u) * 0.12)
+	end
+	-- Glowing hem and the seam down the front
+	local hem = make(Vector3.new(0.08 * S, 3.2 * S, 3.2 * S), ctx.Accent, Enum.Material.Neon, 0.2, Enum.PartType.Cylinder)
+	add(hem, CFrame.new(0, 0.05 * S, 0) * CFrame.Angles(0, 0, math.rad(90)), "Body", 0.12)
+	capsule("Body", Vector3.new(0, 0.3, -1.5), Vector3.new(0, 2.4, -0.55), 0.04, 0.04, ctx.Accent, 0.1)
+	-- Waist sash
+	local sash = make(Vector3.new(0.18 * S, 1.25 * S, 1.25 * S), ctx.Accent, Enum.Material.Neon, 0.25, Enum.PartType.Cylinder)
+	add(sash, CFrame.new(0, 2.5 * S, 0) * CFrame.Angles(0, 0, math.rad(90)), "Body")
+	-- Torso: waist, ribcage, bust, collarbones
+	sphere("Body", Vector3.new(0, 2.75, 0), 0.5, skin)
+	sphere("Body", Vector3.new(0, 3.15, 0), 0.62, skin)
+	sphere("Body", Vector3.new(0, 3.5, -0.05), 0.66, skin)
+	capsule("Body", Vector3.new(-0.62, 3.85, 0), Vector3.new(0.62, 3.85, 0), 0.22, 0.22, skin)
+	-- Chest gem
+	local shell, core = gemPair(ctx, 0.5 * S, ctx.Color)
+	shell.Parent = model
+	core.Parent = model
+	add(shell, CFrame.new(0, 3.35 * S, -0.62 * S) * GEM_TILT)
+	add(core, CFrame.new(0, 3.35 * S, -0.62 * S) * GEM_TILT)
+	-- Pauldrons: rounded caps crowned with crystal
+	for _, side in { -1, 1 } do
+		sphere("Body", Vector3.new(side * 0.85, 3.9, 0), 0.4, robe, nil, ROBE_T)
+		for k = 1, 3 do
+			crystal("Body", Vector3.new(side * (0.8 + k * 0.08), 4.1, (k - 2) * 0.22), Vector3.new(side * (1.25 + k * 0.25), 4.7 + (2 - math.abs(k - 2)) * 0.35, (k - 2) * 0.35), 0.18, if k == 2 then ctx.Accent else ctx.Color)
+		end
+	end
+	-- Cape: two long panes falling from the shoulders
+	for _, side in { -1, 1 } do
+		local cape = make(Vector3.new(0.12 * S, 3.6 * S, 1.3 * S), robe, Enum.Material.Glass, 0.45)
+		add(cape, CFrame.new(side * 0.45 * S, 2.2 * S, 0.75 * S) * CFrame.Angles(math.rad(8), 0, side * math.rad(6)) * CFrame.Angles(0, math.rad(90), 0), "Body", 0.08)
+	end
+	-- Arms: shoulder to elbow to wrist, slender hands with fingers.
+	for _, side in { -1, 1 } do
+		local group = if side < 0 then "LeftArm" else "RightArm"
+		capsule(group, Vector3.zero, Vector3.new(side * 0.1, -1.05, 0.05), 0.2, 0.15, skin)
+		capsule(group, Vector3.new(side * 0.1, -1.05, 0.05), Vector3.new(side * 0.1, -1.1, -1.0), 0.15, 0.11, skin)
+		sphere(group, Vector3.new(side * 0.1, -1.1, -1.12), 0.14, skin)
+		for k = -1, 1 do
+			capsule(group, Vector3.new(side * 0.1 + k * 0.07, -1.1, -1.2), Vector3.new(side * 0.1 + k * 0.09, -1.18, -1.45), 0.035, 0.025, skin)
+		end
+		-- A crystal bracer
+		local bracer = make(Vector3.new(0.18 * S, 0.36 * S, 0.36 * S), ctx.Accent, Enum.Material.Neon, 0.2, Enum.PartType.Cylinder)
+		add(bracer, CFrame.new(side * 0.1 * S, -1.08 * S, -0.75 * S) * CFrame.Angles(0, math.rad(90), 0), group)
+	end
+	-- Neck and head
+	capsule("Head", Vector3.new(0, -0.6, 0), Vector3.new(0, -0.25, 0), 0.15, 0.15, skin)
+	sphere("Head", Vector3.zero, 0.42, skin)
+	sphere("Head", Vector3.new(0, -0.22, -0.18), 0.28, skin) -- jaw
+	for _, side in { -1, 1 } do
+		capsule("Head", Vector3.new(side * 0.12, 0.05, -0.39), Vector3.new(side * 0.26, 0.08, -0.33), 0.035, 0.03, WHITE, 0)
+	end
+	local gemBrow = make(Vector3.one * 0.14 * S, ctx.Accent, Enum.Material.Neon, 0, nil)
+	add(gemBrow, CFrame.new(0, 0.22 * S, -0.4 * S) * GEM_TILT, "Head")
+	if variant == "Bloom" then
+		-- Billowing hair: clustered rounded puffs
+		for k, spot in { Vector3.new(0, 0.55, 0.3), Vector3.new(-0.5, 0.35, 0.35), Vector3.new(0.5, 0.35, 0.35), Vector3.new(0, 0.9, 0.55), Vector3.new(-0.38, 0.75, 0.6), Vector3.new(0.38, 0.75, 0.6), Vector3.new(0, 0.35, 0.65) } do
+			sphere("Head", spot, 0.42 - (k % 3) * 0.05, if k % 2 == 0 then ctx.Accent else robe, nil, 0.3)
+		end
+	elseif variant == "Halo" then
+		-- A crown of crystal rays
+		for k = 1, 9 do
+			local a = (k - 5) * 0.32
+			local base = Vector3.new(math.sin(a) * 0.4, 0.3 + math.cos(a) * 0.2, 0.15)
+			crystal("Head", base, base + Vector3.new(math.sin(a) * 0.8, 0.9 - math.abs(k - 5) * 0.1, 0.2), 0.12, if k % 2 == 0 then ctx.Accent else ctx.Color)
+		end
+		sphere("Head", Vector3.new(0, 0.25, 0.25), 0.4, robe, nil, 0.3)
+	else
+		-- A towering spire of hair: stacked, tapering rings
+		for k = 0, 6 do
+			local u = k / 6
+			sphere("Head", Vector3.new(0, 0.35 + u * 1.7, 0.22 + u * 0.45), 0.42 * (1 - u * 0.75), if k % 2 == 0 then robe else ctx.Accent, nil, 0.3)
+		end
+		crystal("Head", Vector3.new(0, 2, 0.65), Vector3.new(0, 2.7, 0.85), 0.14, ctx.Accent)
+	end
+	-- Light halo behind the head.
+	local h = host(ctx)
+	ribbon(ctx, h, circle(S * 1.1, 40), S * 0.08, function(u)
+		return grad(ctx, 0.2 + 0.7 * (0.5 + 0.5 * math.sin(u * TAU * 3)))
+	end, 0.15)
+	-- Silhouette glow.
+	local outline = Instance.new("Highlight")
+	outline.FillColor = ctx.Color
+	outline.FillTransparency = 0.75
+	outline.OutlineColor = lerp(ctx.Accent, WHITE, 0.4)
+	outline.OutlineTransparency = 0.15
+	outline.DepthMode = Enum.HighlightDepthMode.Occluded
 	outline.Adornee = model
+	outline.Parent = ctx.Parent
 
 	-- Fade out while the camera is inside or right behind the giant (only for
 	-- the wearer's own view), so it never blocks your sight.
-	local partsOnly: { BasePart } = {}
 	local baseTransparency: { number } = {}
 	for i, piece in pieces do
-		partsOnly[i] = piece.Part
 		baseTransparency[i] = piece.Part.Transparency
 	end
 	local fade = 0
 
 	return function(t, root)
-		local bob = math.sin(t * 0.9) * S * 0.08
 		if ctx.Eye then
 			local center = (root * CFrame.new(0, S * 2.5, behind)).Position
 			local d = (ctx.Eye() - center).Magnitude
 			local target = math.clamp((S * 4.5 - d) / (S * 2), 0, 1) * 0.85
 			if math.abs(target - fade) > 0.02 then
 				fade = target
-				for i, p in partsOnly do
-					p.Transparency = baseTransparency[i] + (1 - baseTransparency[i]) * fade
+				for i, piece in pieces do
+					piece.Part.Transparency = baseTransparency[i] + (1 - baseTransparency[i]) * fade
 				end
 				outline.Enabled = fade < 0.5
 			end
 		end
-		local frame = root * CFrame.new(0, ctx.Ground + bob, behind)
 		local breath = math.sin(t * 0.9)
-		local arms = {
-			LeftArm = frame * CFrame.new(-S * 1.0, S * 3.6, 0) * CFrame.Angles(math.rad(10 + breath * 4), 0, math.rad(12 + breath * 3)),
-			RightArm = frame * CFrame.new(S * 1.0, S * 3.6, 0) * CFrame.Angles(math.rad(10 - breath * 4), 0, -math.rad(12 + breath * 3)),
-			Head = frame * CFrame.new(0, S * 4.75, 0) * CFrame.Angles(math.rad(-6 + breath * 2), math.sin(t * 0.4) * 0.12, 0),
+		local sway = math.sin(t * 0.45)
+		local frame = root * CFrame.new(0, ctx.Ground + breath * S * 0.06, behind) * CFrame.Angles(0, sway * 0.06, sway * 0.025)
+		-- Slow, graceful gestures: one hand rises while the other rests.
+		local gesture = math.sin(t * 0.55)
+		local groups = {
+			Body = frame,
+			LeftArm = frame * CFrame.new(-0.88 * S, 3.85 * S, 0) * CFrame.Angles(math.rad(25 + gesture * 18), math.rad(10), math.rad(-14 - breath * 3)),
+			RightArm = frame * CFrame.new(0.88 * S, 3.85 * S, 0) * CFrame.Angles(math.rad(25 - gesture * 18), math.rad(-10), math.rad(14 + breath * 3)),
+			Head = frame * CFrame.new(0, 4.75 * S, -0.05 * S) * CFrame.Angles(math.rad(-6 + breath * 2), math.sin(t * 0.35) * 0.18, math.sin(t * 0.5) * 0.05),
 		}
 		for _, piece in pieces do
-			local group = arms[piece.Group]
-			if group then
-				ctx.Place(piece.Part, group * piece.Offset)
-			else
-				ctx.Place(piece.Part, frame * piece.Offset)
+			local cf = groups[piece.Group] * piece.Offset
+			if piece.Ripple then
+				cf = cf * CFrame.new(math.sin(t * 1.4 + piece.Offset.Y) * piece.Ripple * S, 0, math.cos(t * 1.1 + piece.Offset.Y) * piece.Ripple * S)
 			end
+			ctx.Place(piece.Part, cf)
 		end
-		ctx.Place(h, arms.Head * CFrame.new(0, 0, S * 0.7) * CFrame.Angles(math.rad(90), t * 0.3, 0))
+		ctx.Place(h, groups.Head * CFrame.new(0, 0.2 * S, 0.75 * S) * CFrame.Angles(math.rad(90), t * 0.3, 0))
 	end
 end
 

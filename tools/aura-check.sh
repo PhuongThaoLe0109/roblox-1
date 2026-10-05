@@ -27,7 +27,7 @@ local seen = {}
 for id in Recipes.All do
 	assert(GemCatalog.Get(id), "recipe for unknown gem " .. id)
 end
-local budget = { 30, 50, 100, 150, 240 }
+local budget = { 30, 50, 100, 200, 280 }
 -- A stand-in R15 character for the limb-following layers.
 local function dummy(root)
 	local character = Instance.new("Model")
