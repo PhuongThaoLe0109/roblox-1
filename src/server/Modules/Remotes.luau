@@ -1,14 +1,12 @@
 -- Remotes
--- Creates ReplicatedStorage.GemRemotes and offers small helpers for
--- server -> client notifications and per-player request throttling.
+-- Creates ReplicatedStorage.Remotes. Every client request is validated on the
+-- server; clients never send results, only intentions.
 --
---   RequestFactionChange (RemoteFunction)  client -> server
---   RequestGemPlacement  (RemoteFunction)  client -> server
---   RequestFastTravel    (RemoteFunction)  client -> server
---   Notify               (RemoteEvent)     server -> client (text, kind)
---
--- Notify kinds the client understands: "Info", "Success", "Warning",
--- "Capture", "RankUp", "Travel".
+--   RequestRoll    RemoteFunction  client -> server  () -> (ok, gemId | reason, count | retryIn)
+--   RequestEquip   RemoteFunction  client -> server  (gemId) -> (ok, reason?)
+--   GetProfile     RemoteFunction  client -> server  () -> { Inventory, Equipped, Rolls }?
+--   InventorySync  RemoteEvent     server -> client  ("Full", snapshot) | ("Gem", id, count) | ("Equipped", id)
+--   Announce       RemoteEvent     server -> all     (kind, playerName, gemId)  kind = "Server" | "Banner"
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16,53 +14,38 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Remotes = {}
 
 local folder = Instance.new("Folder")
-folder.Name = "GemRemotes"
+folder.Name = "Remotes"
 
-local function remoteFunction(name: string): RemoteFunction
-	local remote = Instance.new("RemoteFunction")
+local function create(className: string, name: string): any
+	local remote = Instance.new(className)
 	remote.Name = name
 	remote.Parent = folder
 	return remote
 end
 
-local function remoteEvent(name: string): RemoteEvent
-	local remote = Instance.new("RemoteEvent")
-	remote.Name = name
-	remote.Parent = folder
-	return remote
-end
-
-Remotes.RequestFactionChange = remoteFunction("RequestFactionChange")
-Remotes.RequestGemPlacement = remoteFunction("RequestGemPlacement")
-Remotes.RequestFastTravel = remoteFunction("RequestFastTravel")
-Remotes.Notify = remoteEvent("Notify")
+Remotes.RequestRoll = create("RemoteFunction", "RequestRoll") :: RemoteFunction
+Remotes.RequestEquip = create("RemoteFunction", "RequestEquip") :: RemoteFunction
+Remotes.GetProfile = create("RemoteFunction", "GetProfile") :: RemoteFunction
+Remotes.InventorySync = create("RemoteEvent", "InventorySync") :: RemoteEvent
+Remotes.Announce = create("RemoteEvent", "Announce") :: RemoteEvent
 
 folder.Parent = ReplicatedStorage
 
-function Remotes.NotifyPlayer(player: Player, text: string, kind: string?)
-	if player.Parent == Players then
-		Remotes.Notify:FireClient(player, text, kind or "Info")
-	end
-end
-
-function Remotes.NotifyAll(text: string, kind: string?)
-	Remotes.Notify:FireAllClients(text, kind or "Info")
-end
-
--- Returns a function(player) -> boolean that is true when the player must wait.
-function Remotes.CreateThrottle(cooldown: number): (Player) -> boolean
+-- Returns a function(player) -> secondsLeft: 0 when the player may act now
+-- (and the cooldown restarts), otherwise how long they still have to wait.
+function Remotes.CreateCooldown(seconds: number): (Player) -> number
 	local last: { [Player]: number } = {}
 	Players.PlayerRemoving:Connect(function(player)
 		last[player] = nil
 	end)
-	return function(player: Player): boolean
+	return function(player: Player): number
 		local now = os.clock()
 		local previous = last[player]
-		if previous and now - previous < cooldown then
-			return true
+		if previous and now - previous < seconds then
+			return seconds - (now - previous)
 		end
 		last[player] = now
-		return false
+		return 0
 	end
 end
 

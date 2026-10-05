@@ -1,85 +1,67 @@
 # roblox-1 — Prism Shores (working title)
 
-Crystal-gem faction warfare across 12 islands. Luau source laid out for [Rojo](https://rojo.space)
-(`rojo serve`, then connect from the Studio plugin).
+A PvP brawler: roll gems, wear their aura, jump into the arena and fight.
+Luau source laid out for [Rojo](https://rojo.space) (`rojo serve`, then connect from the Studio plugin).
+
+## Game loop
+
+1. Spawn in the lobby. **Roll** for gems (free, unlimited, 1.5 s cooldown) and open the **Inventory**.
+2. Pick a gem to wear: gems are purely cosmetic and change your **aura** (each of the 100 has its own colours and look).
+3. Press **Play** to enter the arena. Everyone has the same full combat kit from the start.
+4. When you're defeated you return to the lobby, choose again and jump back in.
+
+## Gems & rolling
+
+- `src/shared/GemCatalog.luau` lists the 100 gems from most common (Quartz) to rarest (The First Light).
+  Odds are shown as **"1 in N"**: every gem except Quartz rolls with probability exactly `1/N`; Quartz takes the rest.
+- Very rare pulls are announced to the whole server ("1 in 100,000" or rarer) or shown as a full-screen banner
+  ("1 in 100,000,000" or rarer), and saved to the DataStore immediately.
+- **Hidden pity** (`src/server/Modules/RollConfig.luau`, server-only, never replicated): three tiers that quietly raise
+  the odds of better gems during long dry streaks and guarantee one at a hard limit. Gems rarer than
+  "1 in 1,000,000,000,000" are never helped by pity.
+- The server does the roll with 64-bit randomness (two 32-bit draws), so even "1 in 300,000,000,000,000" is reachable.
+
+Run the offline roll simulation after changing odds or pity:
+
+```sh
+tools/roll-sim.sh path/to/luau        # standalone Luau CLI from github.com/luau-lang/luau
+```
+
+## Layout
 
 ```
 src/
   shared/          -> ReplicatedStorage
-    GemConfig        gem types, placements, factions, 12 ranks, attribute/tag names
-    TerritoryConfig  12 islands, hub, home bases, capture & economy rules, layout math
-    SkyConfig        pastel day/night keyframes (shared clock)
+    GemCatalog       100 gems: name, "1 in N" odds, aura colours
     Signal           leak-safe event object
-  serverstorage/   -> ServerStorage
-    MapBuilder       procedural world generator (bake once in Edit mode)
   server/          -> ServerScriptService
-    Main.server      entry point; wires everything in order
+    Main.server      entry point
     Modules/
-      GemDataManager   DataStore persistence, session locking, gem on body
-      FactionTeams     Teams + spawning/respawning at faction homes
-      PortalService    rank-gated portals and fast travel
-      TerritoryService capture points, income, location tracking, anti-bypass
-      Remotes          ReplicatedStorage.GemRemotes + notifications
+      PlayerData     DataStore persistence (session lock): inventory, equipped gem, hidden pity, stats
+      RollConfig     roll cooldown, announcements, hidden pity tiers (server-only)
+      RollEngine     pure roll + pity logic (simulated offline by tools/roll-sim.sh)
+      RollService    RequestRoll / RequestEquip handling, announcements
+      Remotes        ReplicatedStorage.Remotes
+  serverstorage/   -> ServerStorage (MapBuilder arrives in a later PR)
   client/          -> StarterPlayer.StarterPlayerScripts
-    Main.client      entry point
-    SkyCycle         animates sky colours from the shared server clock
-    AmbientFX        smooth spin/float of tagged parts, portal shimmer
-    Movement         eased speed, sprint + trail, double jump, gem float
-    UI/              Theme, LoadingScreen, Hud, TerritoryBar, MapPanel,
-                     FactionSelect, Toasts, PortalLabels
+    UI/Theme         shared UI look (used by the upcoming lobby UI)
+tests/RollSimulation.luau
+tools/roll-sim.sh
 ```
 
-## Baking the map
+## Remotes (`ReplicatedStorage.Remotes`)
 
-Run once in **Edit mode** from the Studio command bar, then save the place:
+| Remote | Direction | Payload |
+|---|---|---|
+| `RequestRoll` | client → server | `() -> (ok, gemId \| reason, count \| retryIn)` |
+| `RequestEquip` | client → server | `(gemId) -> (ok, reason?)` |
+| `GetProfile` | client → server | `() -> { Inventory, Equipped, Rolls }` |
+| `InventorySync` | server → client | `("Full", snapshot)`, `("Gem", id, count)`, `("Equipped", id)` |
+| `Announce` | server → all | `(kind, playerName, gemId)` with kind `"Server"` or `"Banner"` |
 
-```lua
-require(game.ServerStorage.MapBuilder).Build()                    -- build if missing
-require(game.ServerStorage.MapBuilder).Build({ Rebuild = true })  -- regenerate
-```
-
-It creates `Workspace.Map`, fills the terrain sea and adds clouds/atmosphere/bloom.
-At game start the server only builds the map when `Workspace.Map` is missing.
-You can hand-edit or replace the baked map as long as these names stay:
-`Territories/<Id>/{CapturePoint, Arrival}`, `Hub/Arrival`, `Homes/<Faction>/Arrival`,
-and portal parts tagged `Portal` (attributes `PortalKind`, `TargetId`, `TargetName`, `RequiredRank`).
-
-## World & progression
-
-- Hub (Nexus Plaza) in the middle; 12 islands on a ring in open sea; two faction home bases outside.
-- Island *N* needs rank *N*. Each island has a forward portal to the next island and a return portal to the hub.
-  Standing on an island above your rank (e.g. by swimming) sends you back to the hub.
-- Stand on an island's glowing pad to capture it (contested when both factions are on it).
-  Captures pay essence; everyone earns base income plus a bonus per island their faction holds.
-
-## Controls
-
-| Action | Keyboard | Gamepad | Touch |
-|---|---|---|---|
-| Sprint | hold Shift | L3 | Sprint button (toggle) |
-| Double jump / float | Space in air, hold to glide | A | Jump |
-| World map | M | Y | Map button |
-
-Sprint uses Left Shift, so Roblox's shift-lock is disabled
-(`StarterPlayer.EnableMouseLockOption = false`, set in `default.project.json`).
-
-## Replication contract
-
-| Instance | Attributes |
-|---|---|
-| `Player` | `GemDataLoaded`, `GemType`, `GemPlacement`, `Faction`, `Rank`, `RankName`, `CrystalEssence`, `LifetimeEssence`, `WeaponId`, `CurrentIsland`, `CaptureTerritory` |
-| Character (tag `GemCharacter`) | `OwnerUserId`, `GemType`, `Faction`, `WeaponId` |
-| Gem part (tag `Gemstone`) | `OwnerUserId`, `GemType`, `Faction` |
-| `Map.Territories.<Id>` | `Owner`, `Capturer`, `Progress`, `Contested` |
-
-## Original-IP note
-
-The setting is inspired by a crystal-gem cartoon, but every name and design in
-the game is our own: factions (Prism Guardians / Crown Dominion / Rogue Shards),
-islands, ranks, weapons and landmarks. Gem types use real mineral names. Avoid
-copying show characters, logos (e.g. the star or diamond emblems) or music.
+Player attributes: `DataLoaded`, `EquippedGem`, `TotalRolls`.
 
 ## Studio testing
 
 Enable *Game Settings → Security → Enable Studio Access to API Services* to test saving.
-Without it the data manager runs on temporary, unsaved data.
+Without it the game runs on temporary, unsaved data.
