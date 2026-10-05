@@ -444,6 +444,24 @@ function PlayerData.AddGem(player: Player, gemId: string): number?
 	return count
 end
 
+-- Gives one of every gem the player doesn't own yet (founder command).
+-- Returns how many new gems were added.
+function PlayerData.GrantAll(player: Player): number
+	local profile = profiles[player]
+	if not profile then
+		return 0
+	end
+	local added = 0
+	for _, gem in GemCatalog.List do
+		if (profile.Data.Inventory[gem.Id] or 0) <= 0 then
+			profile.Data.Inventory[gem.Id] = 1
+			added += 1
+		end
+	end
+	Remotes.InventorySync:FireClient(player, "Full", publicSnapshot(profile.Data))
+	return added
+end
+
 function PlayerData.Equip(player: Player, gemId: string): (boolean, string?)
 	local profile = profiles[player]
 	if not profile then

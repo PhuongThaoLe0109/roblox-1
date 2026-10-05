@@ -2,7 +2,8 @@
 --   * "Server" announcements: a card slides in at the top for rare pulls by
 --     anyone in the server (gem icon, player, gem name, odds).
 --   * "Banner": a full-width rainbow ribbon with a flash for the rarest pulls.
---   * context.Toast(text, kind): small status messages (errors, hints).
+--   * context.Toast(text, kind): small status messages (errors, hints, and
+--     server notices from the Notify remote). kind: Warning / Success / Info.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -193,12 +194,12 @@ function Announcements.Init(screen: ScreenGui, context)
 	end)
 
 	----------------------------------------------------------------------------
-	-- Toasts (bottom centre, above the roll button)
+	-- Toasts (bottom centre, above the skill bar)
 	----------------------------------------------------------------------------
 	local toasts = Theme.new("Frame", {
 		Name = "Toasts",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -170),
+		Position = UDim2.new(0.5, 0, 1, -250),
 		Size = UDim2.fromOffset(460, 200),
 		BackgroundTransparency = 1,
 		ZIndex = 45,
@@ -216,7 +217,7 @@ function Announcements.Init(screen: ScreenGui, context)
 			Text = text,
 			FontFace = Theme.Faces.Bold,
 			TextSize = 15,
-			TextColor3 = if kind == "Warning" then C.Warning else C.Text,
+			TextColor3 = if kind == "Warning" then C.Warning elseif kind == "Success" then C.Success elseif kind == "Info" then C.Cyan else C.Text,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			Size = UDim2.fromScale(1, 1),
 			ZIndex = 46,
@@ -228,6 +229,14 @@ function Announcements.Init(screen: ScreenGui, context)
 			card:Destroy()
 		end)
 	end
+
+	-- Messages from the server (founder commands and the like).
+	local notify = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Notify") :: RemoteEvent
+	notify.OnClientEvent:Connect(function(text: string, kind: string?)
+		if type(text) == "string" then
+			context.Toast(text, kind)
+		end
+	end)
 end
 
 return Announcements

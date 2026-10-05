@@ -1,6 +1,8 @@
 -- LobbyHud
--- The lobby screen: title lettering, roll count + equipped aura, the big ROLL
--- button with its cooldown bar, Auto / Fast toggles, Inventory and PLAY.
+-- The rolling side of the screen: title lettering, roll count + equipped
+-- aura, the ROLL button with its cooldown bar, Auto / Fast toggles and the
+-- Inventory button (bottom left). There is no PLAY button: the whole world is
+-- the battlefield, so you fight with your gem as soon as you spawn.
 --   R / ButtonX   roll
 --   I / ButtonY   inventory (handled by Inventory)
 -- Auto roll keeps rolling and stops by itself after a rare result so the
@@ -22,15 +24,9 @@ local LobbyHud = {}
 local ROLL_COOLDOWN = 1.5 -- mirrors the server; the server is authoritative
 local AUTO_STOP_TIER = 3 -- auto roll pauses on "1 in 100,000" or rarer
 
-local PLAY_ERRORS = {
-	ArenaClosed = "The arena opens soon!",
-	NotLoaded = "Still loading your data…",
-}
-
 function LobbyHud.Init(screen: ScreenGui, context)
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local rollRemote = remotes:WaitForChild("RequestRoll") :: RemoteFunction
-	local playRemote = remotes:WaitForChild("RequestPlay") :: RemoteFunction
 
 	local root = Theme.new("Frame", {
 		Name = "LobbyHud",
@@ -96,22 +92,21 @@ function LobbyHud.Init(screen: ScreenGui, context)
 	refreshStats()
 
 	----------------------------------------------------------------------------
-	-- Roll cluster (bottom centre)
+	-- Roll cluster (bottom left, above Inventory)
 	----------------------------------------------------------------------------
 	local cluster = Theme.new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -28),
-		Size = UDim2.fromOffset(520, 130),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 28, 1, -100),
+		Size = UDim2.fromOffset(340, 92),
 		BackgroundTransparency = 1,
 		Parent = root,
 	})
 
 	local rollButton = Theme.button("ROLL", C.Pink, {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 0),
-		Size = UDim2.fromOffset(260, 80),
+		Position = UDim2.fromOffset(0, 0),
+		Size = UDim2.fromOffset(210, 72),
 		FontFace = Theme.Faces.Display,
-		TextSize = 40,
+		TextSize = 38,
 		Parent = cluster,
 	})
 	local rollStroke = Theme.new("UIStroke", {
@@ -123,19 +118,17 @@ function LobbyHud.Init(screen: ScreenGui, context)
 	})
 	local _ = rollStroke
 	local _, setCooldown = Theme.progressBar({
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 88),
-		Size = UDim2.fromOffset(260, 8),
+		Position = UDim2.fromOffset(0, 80),
+		Size = UDim2.fromOffset(210, 8),
 		Parent = cluster,
 	})
 	setCooldown(1, C.Pink)
 
-	local function toggle(text: string, x: number): (TextButton, (boolean) -> ())
+	local function toggle(text: string, y: number): (TextButton, (boolean) -> ())
 		local button = Theme.button(text, C.Lavender, {
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, x, 0, 18),
-			Size = UDim2.fromOffset(104, 44),
-			TextSize = 17,
+			Position = UDim2.fromOffset(222, y),
+			Size = UDim2.fromOffset(112, 34),
+			TextSize = 15,
 			Parent = cluster,
 		})
 		local function set(on: boolean)
@@ -145,11 +138,11 @@ function LobbyHud.Init(screen: ScreenGui, context)
 		set(false)
 		return button, set
 	end
-	local autoButton, setAuto = toggle("Auto", -200)
-	local fastButton, setFast = toggle("Fast", 200)
+	local autoButton, setAuto = toggle("Auto", 0)
+	local fastButton, setFast = toggle("Fast", 40)
 
 	----------------------------------------------------------------------------
-	-- Menu (bottom left / right)
+	-- Menu (bottom left)
 	----------------------------------------------------------------------------
 	local inventoryButton = Theme.button("✦ Inventory", C.Cyan, {
 		AnchorPoint = Vector2.new(0, 1),
@@ -158,22 +151,6 @@ function LobbyHud.Init(screen: ScreenGui, context)
 		TextSize = 22,
 		Parent = root,
 	})
-	local playButton = Theme.button("PLAY", C.Gold, {
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -28, 1, -28),
-		Size = UDim2.fromOffset(220, 74),
-		FontFace = Theme.Faces.Display,
-		TextSize = 38,
-		Parent = root,
-	})
-	Theme.new("UIStroke", {
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
-		Color = Color3.fromRGB(110, 60, 20),
-		Thickness = 2.5,
-		Transparency = 0.2,
-		Parent = playButton,
-	})
-
 	----------------------------------------------------------------------------
 	-- Behaviour
 	----------------------------------------------------------------------------
@@ -245,13 +222,6 @@ function LobbyHud.Init(screen: ScreenGui, context)
 	inventoryButton.Activated:Connect(function()
 		context.ToggleInventory()
 	end)
-	playButton.Activated:Connect(function()
-		local ok, reason = playRemote:InvokeServer()
-		if not ok then
-			context.Toast(PLAY_ERRORS[reason] or "Can't enter the arena right now.", "Warning")
-		end
-	end)
-
 	ContextActionService:BindAction("GemRoll", function(_, state)
 		if state == Enum.UserInputState.Begin and root.Visible then
 			task.spawn(rollOnce)

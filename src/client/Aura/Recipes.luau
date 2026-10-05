@@ -251,6 +251,14 @@ function Recipes.Build(gem: { Id: string, Index: number }): { { [string]: any } 
 	local i = gem.Index
 	local list: { { [string]: any } } = {}
 
+	-- Every aura stands on its own magic circle.
+	table.insert(list, L("Circle")({
+		Radius = 3 + i * 0.02,
+		Star = if i >= 61 then 8 elseif i >= 32 then 6 else 5,
+		Runes = 8 + math.floor(i / 6),
+		Rings = if i >= 81 then 3 elseif i >= 47 then 2 else 1,
+		Speed = 0.3 + i * 0.004,
+	}))
 	-- Flames for everyone, from a strong burn to a towering inferno.
 	table.insert(list, L("Flame")({
 		Style = FLAME_STYLE[gem.Id] or CYCLE[i % #CYCLE + 1],

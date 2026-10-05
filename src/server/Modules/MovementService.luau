@@ -3,7 +3,7 @@
 --   * SetHoverboard(on): builds or removes the crystal hoverboard under the
 --     player's feet (welded to the root so everyone sees it) and sets the
 --     character's "Hoverboard" attribute, which the owner's client uses to
---     switch to board speed. Not allowed in the arena.
+--     switch to board speed. Not while in combat; a hit knocks you off.
 --   * MovementFX(kind, direction): relays dash / double-jump effects from a
 --     player's client to everyone else (rate limited, kinds whitelisted).
 --
@@ -12,7 +12,9 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
+local CombatConfig = require(ReplicatedStorage:WaitForChild("CombatConfig"))
 local GemCatalog = require(ReplicatedStorage:WaitForChild("GemCatalog"))
 local MovementConfig = require(ReplicatedStorage:WaitForChild("MovementConfig"))
 local Remotes = require(script.Parent:WaitForChild("Remotes"))
@@ -168,6 +170,12 @@ local function buildBoard(player: Player, character: Model, root: BasePart)
 	character:SetAttribute(ATTRIBUTE, true)
 end
 
+-- Dealt or took damage in the last few seconds.
+local function inCombat(player: Player): boolean
+	local last = player:GetAttribute(CombatConfig.PlayerAttributes.LastCombat)
+	return type(last) == "number" and Workspace:GetServerTimeNow() - last < CombatConfig.InCombatTime
+end
+
 local function riding(character: Model?): boolean
 	return character ~= nil and character:GetAttribute(ATTRIBUTE) == true
 end
@@ -189,7 +197,7 @@ local function onSetHoverboard(player: Player, on: unknown)
 		removeBoard(character)
 		return
 	end
-	if player:GetAttribute("InArena") == true and not BOARD.AllowedInArena then
+	if inCombat(player) and not BOARD.AllowedInCombat then
 		return
 	end
 	if toggleCooldown(player) > 0 then
@@ -233,9 +241,9 @@ function MovementService.Init()
 	Remotes.MovementFX.OnServerEvent:Connect(onMovementFX)
 
 	local function watch(player: Player)
-		-- Entering the arena puts the board away.
-		player:GetAttributeChangedSignal("InArena"):Connect(function()
-			if player:GetAttribute("InArena") == true and not BOARD.AllowedInArena and player.Character then
+		-- Hitting or getting hit knocks you off the board.
+		player:GetAttributeChangedSignal(CombatConfig.PlayerAttributes.LastCombat):Connect(function()
+			if not BOARD.AllowedInCombat and player.Character and riding(player.Character) then
 				removeBoard(player.Character)
 			end
 		end)

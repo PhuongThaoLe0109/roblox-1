@@ -21,6 +21,7 @@ local ERROR_TEXT = {
 	NotOwned = "You don't own that gem yet.",
 	Cooldown = "One moment…",
 	NotLoaded = "Still loading your data…",
+	InCombat = "You can't change gems mid-fight. Get away for a few seconds.",
 }
 
 function Inventory.Init(screen: ScreenGui, context)
