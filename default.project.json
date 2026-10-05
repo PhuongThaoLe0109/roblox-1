@@ -1,6 +1,8 @@
 {
   "name": "crystal-gems",
-  "globIgnorePaths": ["**/.gitkeep"],
+  "globIgnorePaths": [
+    "**/.gitkeep"
+  ],
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
@@ -9,6 +11,10 @@
     },
     "ServerScriptService": {
       "$path": "src/server",
+      "$ignoreUnknownInstances": true
+    },
+    "ServerStorage": {
+      "$path": "src/serverstorage",
       "$ignoreUnknownInstances": true
     },
     "StarterPlayer": {
