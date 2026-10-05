@@ -9,6 +9,8 @@ src/
     GemConfig        gem types, placements, factions, 12 ranks, attribute/tag names
     TerritoryConfig  12 islands, hub, home bases, capture & economy rules, layout math
     SkyConfig        pastel day/night keyframes (shared clock)
+    WeaponConfig     8 light-weapons: look, basic attack, Q/E/R skills, all balance numbers
+    CombatConfig     status-effect attribute names, damage formula, safe zones
     Signal           leak-safe event object
   serverstorage/   -> ServerStorage
     MapBuilder       procedural world generator (bake once in Edit mode)
@@ -20,13 +22,22 @@ src/
       PortalService    rank-gated portals and fast travel
       TerritoryService capture points, income, location tracking, anti-bypass
       Remotes          ReplicatedStorage.GemRemotes + notifications
+      Combat/
+        CombatService    hit queries, damage, shields, status effects, knockback, projectiles
+        WeaponService    summon/dismiss, action validation, cooldowns, combo, dispatch
+        WeaponBuilder    procedural glowing weapon models welded to the character
+        SkillKit         shared skill building blocks (combo melee, shots, dashes, slams)
+        Skills/<Id>      one module per weapon: Basic, Q, E, R
+        TrainingDummies  hittable training crystals on the hub
   client/          -> StarterPlayer.StarterPlayerScripts
     Main.client      entry point
     SkyCycle         animates sky colours from the shared server clock
     AmbientFX        smooth spin/float of tagged parts, portal shimmer
-    Movement         eased speed, sprint + trail, double jump, gem float
+    Movement         eased speed, sprint + trail, double jump, gem float, status effects
+    WeaponController weapon input, aim, cooldown prediction, dash/roll/leap motion
+    VFX              all weapon effects + swing/whip/drone/wing animation
     UI/              Theme, LoadingScreen, Hud, TerritoryBar, MapPanel,
-                     FactionSelect, Toasts, PortalLabels
+                     FactionSelect, Toasts, PortalLabels, SkillBar
 ```
 
 ## Baking the map
@@ -52,6 +63,25 @@ and portal parts tagged `Portal` (attributes `PortalKind`, `TargetId`, `TargetNa
 - Stand on an island's glowing pad to capture it (contested when both factions are on it).
   Captures pay essence; everyone earns base income plus a bonus per island their faction holds.
 
+## Weapons
+
+Each gem type has its own light-weapon (`GemConfig.GemTypes.<Gem>.WeaponId`):
+
+| Weapon | Gem | Basic | Q | E | R |
+|---|---|---|---|---|---|
+| Prism Spear | Pearl | thrust combo | Piercing Lunge (dash) | Spear Volley (3 spears) | Mirror Echo (phantom thrusts) |
+| Amethyst Lash | Amethyst | wide lash combo | Lasso Pull | Spin Lash (2 spins) | Tumble Comet (steerable roll) |
+| Ember Gauntlet | Ruby | fast punches | Blaze Rush (dash punch) | Heat Up (attack speed + burn) | Meteor Slam (leap + fire ring) |
+| Rime Gauntlet | Sapphire | chilling punches | Glacier Spikes (slow) | Foresight (dodge next hit) | Deep Freeze (AoE freeze) |
+| Forge Hammer | Bismuth | heavy smashes | Shatter Strike (wind-up crater) | Forge Wall (blocks bodies + shots) | Anvil Quake (3 shockwaves) |
+| Ram Crest | Jasper | headbutts | Horn Charge (stun) | War Cry (ally buff + shield) | Quake Leap (stun) |
+| Arc Drones | Peridot | ranged bolts | Tractor Beam (pull + stun) | Drone Shield | Overload Turret |
+| Tide Wings | Lapis Lazuli | splashing water bolts | Wing Burst (fly-dash) | Riptide Grip (root) | Tidal Surge (wave) |
+
+Balance lives in `WeaponConfig`. Allies can't hurt each other, the hub and homes are PvP-safe,
+and the training crystals on the hub are always hittable for testing.
+Defeat currently uses Roblox's normal death/respawn; the Puff state comes next.
+
 ## Controls
 
 | Action | Keyboard | Gamepad | Touch |
@@ -59,6 +89,9 @@ and portal parts tagged `Portal` (attributes `PortalKind`, `TargetId`, `TargetNa
 | Sprint | hold Shift | L3 | Sprint button (toggle) |
 | Double jump / float | Space in air, hold to glide | A | Jump |
 | World map | M | Y | Map button |
+| Summon / dismiss weapon | F | D-pad Up | Weapon button |
+| Basic attack (hold to repeat) | Left mouse | R2 | Attack button |
+| Skills | Q / E / R | X / B / R1 | Q / E / R buttons |
 
 Sprint uses Left Shift, so Roblox's shift-lock is disabled
 (`StarterPlayer.EnableMouseLockOption = false`, set in `default.project.json`).

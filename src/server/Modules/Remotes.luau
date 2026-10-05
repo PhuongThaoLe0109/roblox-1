@@ -6,6 +6,9 @@
 --   RequestGemPlacement  (RemoteFunction)  client -> server
 --   RequestFastTravel    (RemoteFunction)  client -> server
 --   Notify               (RemoteEvent)     server -> client (text, kind)
+--   WeaponAction         (RemoteEvent)     client -> server (action, aimDir, aimPoint)
+--   WeaponState          (RemoteEvent)     server -> client (event, slot, value)
+--   WeaponFX             (RemoteEvent)     server -> clients (kind, params)
 --
 -- Notify kinds the client understands: "Info", "Success", "Warning",
 -- "Capture", "RankUp", "Travel".
@@ -36,6 +39,9 @@ Remotes.RequestFactionChange = remoteFunction("RequestFactionChange")
 Remotes.RequestGemPlacement = remoteFunction("RequestGemPlacement")
 Remotes.RequestFastTravel = remoteFunction("RequestFastTravel")
 Remotes.Notify = remoteEvent("Notify")
+Remotes.WeaponAction = remoteEvent("WeaponAction")
+Remotes.WeaponState = remoteEvent("WeaponState")
+Remotes.WeaponFX = remoteEvent("WeaponFX")
 
 folder.Parent = ReplicatedStorage
 

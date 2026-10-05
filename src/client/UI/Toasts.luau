@@ -32,7 +32,7 @@ function Toasts.Init(screen: ScreenGui, context)
 	local stack = Theme.new("Frame", {
 		Name = "Toasts",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -120),
+		Position = UDim2.new(0.5, 0, 1, -190), -- above the skill bar
 		Size = UDim2.fromOffset(460, 300),
 		BackgroundTransparency = 1,
 		Parent = screen,

@@ -12,6 +12,8 @@ local playerGui = player:WaitForChild("PlayerGui")
 local SkyCycle = require(script.Parent:WaitForChild("SkyCycle"))
 local AmbientFX = require(script.Parent:WaitForChild("AmbientFX"))
 local Movement = require(script.Parent:WaitForChild("Movement"))
+local VFX = require(script.Parent:WaitForChild("VFX"))
+local WeaponController = require(script.Parent:WaitForChild("WeaponController"))
 
 local UI = script.Parent:WaitForChild("UI")
 local LoadingScreen = require(UI:WaitForChild("LoadingScreen"))
@@ -21,6 +23,7 @@ local MapPanel = require(UI:WaitForChild("MapPanel"))
 local FactionSelect = require(UI:WaitForChild("FactionSelect"))
 local Toasts = require(UI:WaitForChild("Toasts"))
 local PortalLabels = require(UI:WaitForChild("PortalLabels"))
+local SkillBar = require(UI:WaitForChild("SkillBar"))
 
 local screen = Instance.new("ScreenGui")
 screen.Name = "GemHUD"
@@ -48,6 +51,7 @@ end
 -- Shared hooks between UI modules (filled in by the modules that own them).
 local context = {
 	SkyCycle = SkyCycle,
+	WeaponController = WeaponController,
 	ToggleMap = function(_open: boolean?) end,
 	OpenFactionSelect = function() end,
 	Toast = function(_text: string, _kind: string?) end,
@@ -57,6 +61,8 @@ LoadingScreen.Init(screen)
 SkyCycle.Start()
 AmbientFX.Start()
 Movement.Start()
+VFX.Start()
+WeaponController.Start()
 
 -- Each module is isolated so one failure doesn't take down the whole HUD.
 for name, module in {
@@ -66,6 +72,7 @@ for name, module in {
 	MapPanel = MapPanel,
 	FactionSelect = FactionSelect,
 	PortalLabels = PortalLabels,
+	SkillBar = SkillBar,
 } do
 	task.spawn(function()
 		local ok, err = pcall(module.Init, screen, context)

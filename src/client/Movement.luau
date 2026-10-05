@@ -14,6 +14,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
+local CombatConfig = require(ReplicatedStorage:WaitForChild("CombatConfig"))
 local GemConfig = require(ReplicatedStorage:WaitForChild("GemConfig"))
 
 local Movement = {}
@@ -25,6 +26,8 @@ local SPRINT_FOV = 80
 local DOUBLE_JUMP_VELOCITY = 52
 local GLIDE_FALL_SPEED = 9
 local SPARKLE_TEXTURE = "rbxasset://textures/particles/sparkles_main.dds"
+
+local STATUS = CombatConfig.Status
 
 local player = Players.LocalPlayer
 local sprintHeld = false
@@ -105,6 +108,18 @@ local function makeTrail(root: BasePart, color: Color3): Trail
 	return trail
 end
 
+-- Status effects set by the server (see CombatConfig.Status).
+local function statusOf(character: Model): (boolean, number)
+	local t = Workspace:GetServerTimeNow()
+	local function active(name: string): boolean
+		return (character:GetAttribute(name) or 0) > t
+	end
+	local immobile = active(STATUS.StunnedUntil) or active(STATUS.FrozenUntil) or active(STATUS.RootedUntil)
+		or character:GetAttribute(STATUS.Puffed) == true
+	local slow = if active(STATUS.SlowUntil) then character:GetAttribute(STATUS.SlowMult) or 1 else 1
+	return immobile, slow
+end
+
 local function isJumpHeld(): boolean
 	return UserInputService:IsKeyDown(Enum.KeyCode.Space)
 		or UserInputService:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, Enum.KeyCode.ButtonA)
@@ -127,6 +142,7 @@ local function onCharacter(character: Model)
 	local gliding = false
 	local airborneSince = 0
 	local currentSpeed = humanoid.WalkSpeed
+	local jumpLocked = false
 	local connections: { RBXScriptConnection } = {}
 
 	table.insert(connections, humanoid.StateChanged:Connect(function(_, new)
@@ -147,6 +163,9 @@ local function onCharacter(character: Model)
 
 	table.insert(connections, UserInputService.JumpRequest:Connect(function()
 		lastJumpRequest = os.clock()
+		if (statusOf(character)) then
+			return
+		end
 		local state = humanoid:GetState()
 		local inAir = state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping
 		if inAir and canDoubleJump and os.clock() - airborneSince > 0.18 then
@@ -162,9 +181,21 @@ local function onCharacter(character: Model)
 		if humanoid.Health <= 0 then
 			return
 		end
+		local immobile, slow = statusOf(character)
+		if immobile ~= jumpLocked then
+			jumpLocked = immobile
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, not immobile)
+		end
+		if immobile then
+			currentSpeed = 0
+			humanoid.WalkSpeed = 0
+			trail.Enabled = false
+			return
+		end
+
 		local moving = humanoid.MoveDirection.Magnitude > 0.1
 		local sprinting = sprintHeld and moving
-		local target = baseSpeed(character) * (if sprinting then SPRINT_MULTIPLIER else 1)
+		local target = baseSpeed(character) * (if sprinting then SPRINT_MULTIPLIER else 1) * slow
 
 		-- Exponential ease toward the target speed (frame-rate independent).
 		local alpha = 1 - math.exp(-ACCELERATION * dt)
