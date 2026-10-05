@@ -8,6 +8,7 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
+local Auras = require(script.Parent:WaitForChild("Aura"):WaitForChild("Auras"))
 local ClientData = require(script.Parent:WaitForChild("ClientData"))
 local MapFX = require(script.Parent:WaitForChild("MapFX"))
 local UI = script.Parent:WaitForChild("UI")
@@ -42,6 +43,7 @@ local context = {
 	Toast = function(_text: string, _kind: string?) end,
 	ToggleInventory = function(_open: boolean?) end,
 	SetLobbyVisible = function(_visible: boolean) end,
+	PreviewAura = Auras.SetPreview, -- try a gem's aura on before equipping it
 	InLobby = function(): boolean
 		return true -- the arena arrives with the combat PR
 	end,
@@ -49,6 +51,7 @@ local context = {
 
 MapFX.Start()
 ClientData.Start()
+Auras.Start()
 RollReveal.Init(screen)
 
 for _, entry in {

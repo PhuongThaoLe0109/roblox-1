@@ -21,6 +21,25 @@ Luau source laid out for [Rojo](https://rojo.space) (`rojo serve`, then connect 
   "1 in 1,000,000,000,000" are never helped by pity.
 - The server does the roll with 64-bit randomness (two 32-bit draws), so even "1 in 300,000,000,000,000" is reachable.
 
+## Auras
+
+Each of the 100 gems has its own hand-tuned aura (`src/client/Aura/Recipes.luau`), drawn locally on every client
+from the wearer's `EquippedGem`. Auras are built from shared layers (`src/client/Aura/Layers.luau`):
+rings and star sigils, orbiting gems and comets, rising motes, embers, petals and snow, crystal wings, crowns,
+light helixes, shard mandalas, light pillars, floating crests, starfields, lightning, eclipses, pulses and monoliths.
+
+- Rarer gems wear more layers and reach further: from a single quiet sigil (Quartz) to eight layers for The First Light.
+- Colours always come from the gem, so no two auras look alike.
+- Only Neon / Glass parts, untextured Beams and Trails, and PointLights; no textures, decals, meshes or ParticleEmitters.
+- One `Workspace:BulkMoveTo` per frame; auras far from the camera are paused and hidden.
+- In the Inventory, selecting an owned gem lets you try its aura on before equipping it.
+
+Check every aura offline (builds and animates all 100, checks part budgets per rarity):
+
+```sh
+tools/aura-check.sh path/to/luau
+```
+
 Run the offline roll simulation after changing odds or pity:
 
 ```sh
@@ -48,6 +67,10 @@ src/
     Main.client      entry point (ScreenGui + responsive UIScale)
     MapFX            client-side animation of the world's decoration
     ClientData       local mirror of inventory / equipped gem / rolls
+    Aura/
+      Auras          draws every player's aura, Inventory "try on" preview
+      Layers         aura building blocks (rings, orbits, wings, helixes, eclipses, ...)
+      Recipes        one recipe per gem
     UI/
       Theme          palette, typography (Merriweather / Michroma / Nunito), shimmer gradients, widgets
       GemArt         gems drawn from UI frames + gradients, no image assets
@@ -56,7 +79,7 @@ src/
       Inventory      100-gem collection grid, filters, detail pane, equip
       Announcements  server cards, rainbow banner for the rarest pulls, toasts
 tests/RollSimulation.luau, tests/RobloxStub.luau
-tools/roll-sim.sh, tools/map-check.sh, tools/render-map.py
+tools/roll-sim.sh, tools/map-check.sh, tools/render-map.py, tools/aura-check.sh
 ```
 
 ## The world (`ServerStorage.MapBuilder`)
