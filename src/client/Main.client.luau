@@ -11,11 +11,13 @@ local playerGui = player:WaitForChild("PlayerGui")
 local Auras = require(script.Parent:WaitForChild("Aura"):WaitForChild("Auras"))
 local ClientData = require(script.Parent:WaitForChild("ClientData"))
 local MapFX = require(script.Parent:WaitForChild("MapFX"))
+local MovementController = require(script.Parent:WaitForChild("Movement"):WaitForChild("MovementController"))
 local UI = script.Parent:WaitForChild("UI")
 local RollReveal = require(UI:WaitForChild("RollReveal"))
 local Announcements = require(UI:WaitForChild("Announcements"))
 local Inventory = require(UI:WaitForChild("Inventory"))
 local LobbyHud = require(UI:WaitForChild("LobbyHud"))
+local MovementHud = require(UI:WaitForChild("MovementHud"))
 
 local screen = Instance.new("ScreenGui")
 screen.Name = "PrismUI"
@@ -50,6 +52,7 @@ local context = {
 }
 
 MapFX.Start()
+MovementController.Start()
 ClientData.Start()
 Auras.Start()
 RollReveal.Init(screen)
@@ -58,6 +61,7 @@ for _, entry in {
 	{ "Announcements", Announcements },
 	{ "Inventory", Inventory },
 	{ "LobbyHud", LobbyHud },
+	{ "MovementHud", MovementHud },
 } do
 	local ok, err = pcall(entry[2].Init, screen, context)
 	if not ok then

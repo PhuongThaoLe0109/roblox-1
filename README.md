@@ -135,15 +135,21 @@ tools/render-map.py parts.txt preview.png --cam 0,105,600 --look 0,70,-20   # z-
 | `GetProfile` | client → server | `() -> { Inventory, Equipped, Rolls }` |
 | `InventorySync` | server → client | `("Full", snapshot)`, `("Gem", id, count)`, `("Equipped", id)` |
 | `Announce` | server → all | `(kind, playerName, gemId)` with kind `"Server"` or `"Banner"` |
+| `SetHoverboard` | client → server | `(on: boolean)`: server builds/removes the board, sets character attribute `Hoverboard` |
+| `MovementFX` | client → server → others | `("Dash" \| "DoubleJump", direction?)`, relayed as `(character, kind, direction?)` |
 
 Player attributes: `DataLoaded`, `EquippedGem`, `TotalRolls`.
 
-## Lobby controls
+## Controls
 
 | Action | Keyboard | Gamepad |
 |---|---|---|
 | Roll | R / ROLL button | X |
 | Inventory | I | Y |
+| Sprint (hold) | Ctrl / SPRINT button | L3 (toggle) |
+| Dash (one more in the air) | Q / DASH button | B |
+| Double jump | Space in the air | A in the air |
+| Hoverboard (not in the arena) | B / BOARD button | D-pad up |
 
 Auto roll keeps rolling and pauses itself after a "1 in 100,000" or rarer result. Fast skips the reel.
 

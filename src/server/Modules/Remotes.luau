@@ -8,6 +8,9 @@
 --   RequestPlay    RemoteFunction  client -> server  () -> (ok, reason?)   enter the arena
 --   InventorySync  RemoteEvent     server -> client  ("Full", snapshot) | ("Gem", id, count) | ("Equipped", id)
 --   Announce       RemoteEvent     server -> all     (kind, playerName, gemId)  kind = "Server" | "Banner"
+--   SetHoverboard  RemoteEvent     client -> server  (on: boolean)
+--   MovementFX     RemoteEvent     client -> server  (kind, direction?)   kind = "Dash" | "DoubleJump"
+--                                  server -> others  (character, kind, direction?)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -30,6 +33,8 @@ Remotes.GetProfile = create("RemoteFunction", "GetProfile") :: RemoteFunction
 Remotes.RequestPlay = create("RemoteFunction", "RequestPlay") :: RemoteFunction
 Remotes.InventorySync = create("RemoteEvent", "InventorySync") :: RemoteEvent
 Remotes.Announce = create("RemoteEvent", "Announce") :: RemoteEvent
+Remotes.SetHoverboard = create("RemoteEvent", "SetHoverboard") :: RemoteEvent
+Remotes.MovementFX = create("RemoteEvent", "MovementFX") :: RemoteEvent
 
 folder.Parent = ReplicatedStorage
 
