@@ -5,6 +5,7 @@
 --   RequestRoll    RemoteFunction  client -> server  () -> (ok, gemId | reason, count | retryIn)
 --   RequestEquip   RemoteFunction  client -> server  (gemId) -> (ok, reason?)
 --   GetProfile     RemoteFunction  client -> server  () -> { Inventory, Equipped, Rolls }?
+--   RequestPlay    RemoteFunction  client -> server  () -> (ok, reason?)   enter the arena
 --   InventorySync  RemoteEvent     server -> client  ("Full", snapshot) | ("Gem", id, count) | ("Equipped", id)
 --   Announce       RemoteEvent     server -> all     (kind, playerName, gemId)  kind = "Server" | "Banner"
 
@@ -26,6 +27,7 @@ end
 Remotes.RequestRoll = create("RemoteFunction", "RequestRoll") :: RemoteFunction
 Remotes.RequestEquip = create("RemoteFunction", "RequestEquip") :: RemoteFunction
 Remotes.GetProfile = create("RemoteFunction", "GetProfile") :: RemoteFunction
+Remotes.RequestPlay = create("RemoteFunction", "RequestPlay") :: RemoteFunction
 Remotes.InventorySync = create("RemoteEvent", "InventorySync") :: RemoteEvent
 Remotes.Announce = create("RemoteEvent", "Announce") :: RemoteEvent
 

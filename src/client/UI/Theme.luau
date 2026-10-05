@@ -35,6 +35,37 @@ Theme.Fonts = {
 	Bold = Enum.Font.GothamBold,
 }
 
+-- Typography. Roblox font families (no custom assets needed):
+--   Display  Merriweather Black Italic: gem names, big reveals
+--   Title    Merriweather Bold: panel titles
+--   Odds     Michroma: "1 in N" lines
+--   Heavy    Nunito Heavy: buttons, numbers
+--   Bold     Nunito Bold, Body Nunito SemiBold: everything else
+local MERRIWEATHER = "rbxasset://fonts/families/Merriweather.json"
+local NUNITO = "rbxasset://fonts/families/Nunito.json"
+Theme.Faces = {
+	Display = Font.new(MERRIWEATHER, Enum.FontWeight.Black, Enum.FontStyle.Italic),
+	Title = Font.new(MERRIWEATHER, Enum.FontWeight.Bold),
+	Odds = Font.new("rbxasset://fonts/families/Michroma.json"),
+	Heavy = Font.new(NUNITO, Enum.FontWeight.Heavy),
+	Bold = Font.new(NUNITO, Enum.FontWeight.Bold),
+	Body = Font.new(NUNITO, Enum.FontWeight.SemiBold),
+}
+
+-- Legacy Enum.Font values passed by callers map onto the new faces.
+local FACE_FOR_FONT = {
+	[Theme.Fonts.Title] = Theme.Faces.Heavy,
+	[Theme.Fonts.Bold] = Theme.Faces.Bold,
+	[Theme.Fonts.Body] = Theme.Faces.Body,
+}
+
+local function applyFace(props: { [string]: any })
+	if props.Font ~= nil then
+		props.FontFace = props.FontFace or FACE_FOR_FONT[props.Font] or Theme.Faces.Body
+		props.Font = nil
+	end
+end
+
 -- Pastel "crystal light" sequence used for shimmering strokes and fills.
 Theme.Prism = ColorSequence.new({
 	ColorSequenceKeypoint.new(0, rgb(255, 160, 210)),
@@ -117,7 +148,35 @@ function Theme.label(props: { [string]: any }): TextLabel
 	for key, value in props do
 		defaults[key] = value
 	end
+	if props.FontFace then
+		defaults.Font = nil
+	end
+	applyFace(defaults)
 	return Theme.new("TextLabel", defaults)
+end
+
+-- Premium lettering: display face, shimmering gradient fill and a soft dark
+-- outline so it reads on any background. `sequence` defaults to Theme.Prism.
+function Theme.headline(props: { [string]: any }, sequence: ColorSequence?, speed: number?): TextLabel
+	local defaults = {
+		FontFace = Theme.Faces.Display,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextXAlignment = Enum.TextXAlignment.Center,
+	}
+	for key, value in props do
+		defaults[key] = value
+	end
+	local label = Theme.label(defaults)
+	Theme.shimmer(label, sequence, speed or 0.35, 0)
+	Theme.new("UIStroke", {
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		Color = Color3.fromRGB(45, 20, 70),
+		Thickness = math.max(1.5, (label.TextSize or 20) / 18),
+		Transparency = 0.25,
+		LineJoinMode = Enum.LineJoinMode.Round,
+		Parent = label,
+	})
+	return label
 end
 
 --------------------------------------------------------------------------------
@@ -202,6 +261,10 @@ function Theme.button(text: string, color: Color3?, props: { [string]: any }?): 
 	for key, value in props or {} do
 		defaults[key] = value
 	end
+	if props and props.FontFace then
+		defaults.Font = nil
+	end
+	applyFace(defaults)
 	local button = Theme.new("TextButton", defaults)
 	Theme.corner(12).Parent = button
 	local h, s, v = base:ToHSV()
