@@ -42,9 +42,11 @@ src/
       RollEngine     pure roll + pity logic (simulated offline by tools/roll-sim.sh)
       RollService    RequestRoll / RequestEquip handling, announcements
       Remotes        ReplicatedStorage.Remotes
-  serverstorage/   -> ServerStorage (MapBuilder arrives in a later PR)
+  serverstorage/   -> ServerStorage
+    MapBuilder/      the gem world (init + Geometry, Palette, Temple, Bridge, Lobby, World, Atmosphere)
   client/          -> StarterPlayer.StarterPlayerScripts
     Main.client      entry point (ScreenGui + responsive UIScale)
+    MapFX            client-side animation of the world's decoration
     ClientData       local mirror of inventory / equipped gem / rolls
     UI/
       Theme          palette, typography (Merriweather / Michroma / Nunito), shimmer gradients, widgets
@@ -53,8 +55,52 @@ src/
       RollReveal     spinning reel + reveal (rays, flash, gradient lettering, NEW!/×count)
       Inventory      100-gem collection grid, filters, detail pane, equip
       Announcements  server cards, rainbow banner for the rarest pulls, toasts
-tests/RollSimulation.luau
-tools/roll-sim.sh
+tests/RollSimulation.luau, tests/RobloxStub.luau
+tools/roll-sim.sh, tools/map-check.sh, tools/render-map.py
+```
+
+## The world (`ServerStorage.MapBuilder`)
+
+Run **once in Edit mode**, then save the place:
+
+```lua
+require(game.ServerStorage.MapBuilder).Build()
+```
+
+If `Workspace.Map` already exists, `Build()` returns it untouched (it never rebuilds, deletes or edits a map).
+At game start the server only builds it as a fallback when the place has no `Workspace.Map`.
+It also sets the lighting and enables `StreamingEnabled` (both only settable from Studio).
+
+What it builds (~16,500 parts, plain SmoothPlastic / Neon / Glass, no textures, no Terrain):
+
+- **Prism Temple (arena)**: a stratified dark-rock island crowned by a pale five-lobed fan.
+  - Double cyan light channels curve from glowing crystal pods to a stepped dais.
+  - A pillar of light with drifting halo rings rises from the dais.
+  - Light falls spill off the lobes; crystal clusters line the rim; etched wave markings cover the floor.
+  - A sealed light-gate closes the bridge entrance.
+- **Aqueduct**: a two-tier arched bridge with railings, crystal lanterns and a light channel.
+- **Dawn Gate (lobby)**: its own island.
+  - Terraced octagonal plaza with neon rose inlays.
+  - The Altar of Fortune with a giant floating gem.
+  - Eight crystal pylons and crystal blossom trees.
+  - A pointed gate arch engraved with the title, and a viewing balcony.
+- **World**:
+  - a teal sea with glowing ripples and glints, and 22 stratified islets;
+  - the Sunken Colossus: two giant stone hands cradling a gem;
+  - giant crystal spires, floating sky islands with light-falls, and a ring of low-poly mountains;
+  - drifting crystal shards, a moon and gradient aurora ribbons.
+
+Gameplay contract:
+- `Map.Arena` has attributes `Center`, `Radius`, `FloorY`, `KillY`, and `Spawns/*` parts tagged `ArenaSpawn`.
+- `Map.Lobby` has a `LobbySpawn` SpawnLocation and attributes `Center`, `Radius`.
+- Decoration tagged `MapSpin` / `MapFloat` / `MapPulse` / `MapRise` is animated client-side by `src/client/MapFX`.
+
+Offline tooling (needs the standalone Luau CLI; the renderer needs Python with Pillow and NumPy):
+
+```sh
+tools/map-check.sh path/to/luau     # runs Build() against a Roblox stub: errors, part sizes, rotations, flat floors, part counts
+MAP_DUMP=true tools/map-check.sh path/to/luau > parts.txt
+tools/render-map.py parts.txt preview.png --cam 0,105,600 --look 0,70,-20   # z-buffered preview render
 ```
 
 ## Remotes (`ReplicatedStorage.Remotes`)

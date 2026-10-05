@@ -9,6 +9,7 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local ClientData = require(script.Parent:WaitForChild("ClientData"))
+local MapFX = require(script.Parent:WaitForChild("MapFX"))
 local UI = script.Parent:WaitForChild("UI")
 local RollReveal = require(UI:WaitForChild("RollReveal"))
 local Announcements = require(UI:WaitForChild("Announcements"))
@@ -46,6 +47,7 @@ local context = {
 	end,
 }
 
+MapFX.Start()
 ClientData.Start()
 RollReveal.Init(screen)
 
