@@ -1028,4 +1028,61 @@ function Layers.Colossus(ctx: Context, spec): Update
 	end
 end
 
+-- The magic circle under the feet that every aura stands on: a glowing floor
+-- disc, an outer ring with rune ticks and a counter-turning star.
+-- { Radius, Star, Runes, Speed, Rings, Disc }
+function Layers.Circle(ctx: Context, spec): Update
+	local radius = spec.Radius or 3.2
+	local outer = host(ctx)
+	local inner = host(ctx)
+	ribbon(ctx, outer, circle(radius, 32), 0.24, function(u)
+		return grad(ctx, 0.15 + 0.6 * (0.5 + 0.5 * math.sin(u * TAU * 3)))
+	end, 0.05)
+	ribbon(ctx, outer, circle(radius * 0.86, 28), 0.12, function(u)
+		return grad(ctx, 0.5 + 0.4 * u)
+	end, 0.25)
+	-- Rune ticks between the two outer rings.
+	local runes = spec.Runes or 10
+	for i = 1, runes do
+		local a = i / runes * TAU
+		local dir = Vector3.new(math.cos(a), 0, math.sin(a))
+		ribbon(ctx, outer, { dir * radius * 0.88, dir * radius * 0.98 }, 0.3, function()
+			return if i % 2 == 0 then ctx.Accent else WHITE
+		end, 0.1)
+	end
+	-- Counter-turning star with its own ring.
+	local points = spec.Star or 5
+	ribbon(ctx, inner, circle(radius * 0.74, points, 0, 2), 0.16, function(u)
+		return grad(ctx, 0.2 + 0.7 * u)
+	end, 0.15)
+	ribbon(ctx, inner, circle(radius * 0.4, 20), 0.12, function()
+		return ctx.Accent
+	end, 0.3)
+	for k = 2, spec.Rings or 1 do
+		ribbon(ctx, inner, circle(radius * (0.4 + k * 0.12), points * 2, 0, if points * 2 > 5 then 3 else 1), 0.08, function(u)
+			return grad(ctx, u)
+		end, 0.45)
+	end
+	-- Glowing floor.
+	local disc: Part? = nil
+	if spec.Disc ~= false then
+		disc = part(ctx, Vector3.new(0.12, radius * 2, radius * 2), ctx.Color, Enum.Material.Neon, 0.86)
+		disc.Shape = Enum.PartType.Cylinder
+	end
+	local speed = spec.Speed or 0.35
+	local y = ctx.Ground + 0.12
+	return function(t, root)
+		local base = root * CFrame.new(0, y, 0)
+		-- Keep the circle flat on the ground even when the body tilts.
+		local look = root.LookVector
+		base = CFrame.new(base.Position) * CFrame.Angles(0, math.atan2(-look.X, -look.Z), 0)
+		ctx.Place(outer, base * CFrame.Angles(0, t * speed, 0))
+		ctx.Place(inner, base * CFrame.new(0, 0.03, 0) * CFrame.Angles(0, -t * speed * 1.6, 0))
+		if disc then
+			ctx.Place(disc, base * CFrame.Angles(0, 0, math.rad(90)))
+			disc.Transparency = 0.84 + 0.06 * math.sin(t * 2)
+		end
+	end
+end
+
 return Layers

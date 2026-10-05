@@ -144,7 +144,7 @@ function MovementHud.Init(screen: ScreenGui, context)
 		Name = "MovementHud",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -28, 1, -116),
+		Position = UDim2.new(1, -28, 1, -28),
 		Size = UDim2.fromOffset(170, 250),
 		Parent = screen,
 	})

@@ -1,6 +1,7 @@
 -- Main (client entry point)
--- Builds the lobby UI in one ScreenGui that survives respawns; a UIScale keeps
--- it readable from phones to 4K monitors.
+-- Starts the world effects, movement, auras and combat, and builds the whole
+-- UI in one ScreenGui that survives respawns; a UIScale keeps it readable from
+-- phones to 4K monitors.
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -12,12 +13,18 @@ local Auras = require(script.Parent:WaitForChild("Aura"):WaitForChild("Auras"))
 local ClientData = require(script.Parent:WaitForChild("ClientData"))
 local MapFX = require(script.Parent:WaitForChild("MapFX"))
 local MovementController = require(script.Parent:WaitForChild("Movement"):WaitForChild("MovementController"))
+local CombatFolder = script.Parent:WaitForChild("Combat")
+local BeastFX = require(CombatFolder:WaitForChild("BeastFX"))
+local CombatController = require(CombatFolder:WaitForChild("CombatController"))
+local Overheads = require(CombatFolder:WaitForChild("Overheads"))
 local UI = script.Parent:WaitForChild("UI")
 local RollReveal = require(UI:WaitForChild("RollReveal"))
 local Announcements = require(UI:WaitForChild("Announcements"))
 local Inventory = require(UI:WaitForChild("Inventory"))
 local LobbyHud = require(UI:WaitForChild("LobbyHud"))
 local MovementHud = require(UI:WaitForChild("MovementHud"))
+local CombatHud = require(UI:WaitForChild("CombatHud"))
+local SkillGuide = require(UI:WaitForChild("SkillGuide"))
 
 local screen = Instance.new("ScreenGui")
 screen.Name = "PrismUI"
@@ -46,8 +53,9 @@ local context = {
 	ToggleInventory = function(_open: boolean?) end,
 	SetLobbyVisible = function(_visible: boolean) end,
 	PreviewAura = Auras.SetPreview, -- try a gem's aura on before equipping it
+	ToggleSkillGuide = function(_open: boolean?) end,
 	InLobby = function(): boolean
-		return true -- the arena arrives with the combat PR
+		return true -- the whole world is open: menus work everywhere
 	end,
 }
 
@@ -55,6 +63,9 @@ MapFX.Start()
 MovementController.Start()
 ClientData.Start()
 Auras.Start()
+CombatController.Start()
+BeastFX.Start()
+Overheads.Start()
 RollReveal.Init(screen)
 
 for _, entry in {
@@ -62,6 +73,8 @@ for _, entry in {
 	{ "Inventory", Inventory },
 	{ "LobbyHud", LobbyHud },
 	{ "MovementHud", MovementHud },
+	{ "CombatHud", CombatHud },
+	{ "SkillGuide", SkillGuide },
 } do
 	local ok, err = pcall(entry[2].Init, screen, context)
 	if not ok then

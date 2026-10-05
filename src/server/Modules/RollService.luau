@@ -5,7 +5,9 @@
 -- Very rare pulls are announced to the whole server and saved immediately.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
+local CombatConfig = require(ReplicatedStorage:WaitForChild("CombatConfig"))
 local GemCatalog = require(ReplicatedStorage:WaitForChild("GemCatalog"))
 local PlayerData = require(script.Parent:WaitForChild("PlayerData"))
 local Remotes = require(script.Parent:WaitForChild("Remotes"))
@@ -74,6 +76,11 @@ function RollService.Init()
 		end
 		if equipCooldown(player) > 0 then
 			return false, "Cooldown"
+		end
+		-- No swapping kits mid-fight.
+		local lastCombat = player:GetAttribute(CombatConfig.PlayerAttributes.LastCombat)
+		if type(lastCombat) == "number" and Workspace:GetServerTimeNow() - lastCombat < CombatConfig.InCombatTime then
+			return false, "InCombat"
 		end
 		return PlayerData.Equip(player, gemId)
 	end

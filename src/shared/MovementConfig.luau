@@ -34,7 +34,7 @@ MovementConfig.Hoverboard = {
 	JumpHeight = 11,
 	Cooldown = 0.6, -- between toggles
 	FieldOfView = 84,
-	AllowedInArena = false,
+	AllowedInCombat = false, -- can't be summoned for a few seconds after a hit, and dismounts on hit
 }
 
 MovementConfig.DefaultFieldOfView = 70

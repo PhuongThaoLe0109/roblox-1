@@ -3,12 +3,12 @@
 --   Sprint      hold Ctrl (gamepad: click the left stick to toggle)
 --   Dash        Q (gamepad: B); one more dash is allowed in the air
 --   Double jump press jump again in the air
---   Hoverboard  B (gamepad: D-pad up) or the HUD button; not in the arena
+--   Hoverboard  B (gamepad: D-pad up) or the HUD button; not while in combat
 --
 -- The character is simulated by this client, so speed, dash and double jump
 -- apply here directly; the server owns the hoverboard model and relays the
--- effects to everyone else. In the arena the combat system owns walk speed,
--- so sprint only changes speed outside it.
+-- effects to everyone else. Combat status (stun, block, wind-ups, beast form)
+-- is applied to walk speed here too, since the client owns its character.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16,6 +16,8 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
+local CombatConfig = require(ReplicatedStorage:WaitForChild("CombatConfig"))
+local GemKits = require(ReplicatedStorage:WaitForChild("GemKits"))
 local MovementConfig = require(ReplicatedStorage:WaitForChild("MovementConfig"))
 local Signal = require(ReplicatedStorage:WaitForChild("Signal"))
 local MovementFX = require(script.Parent:WaitForChild("MovementFX"))
@@ -27,11 +29,16 @@ local DASH = MovementConfig.Dash
 local JUMP = MovementConfig.DoubleJump
 local BOARD = MovementConfig.Hoverboard
 local ATTRIBUTE = MovementConfig.HoverboardAttribute
+local STATUS = CombatConfig.Status
+local SPEEDS = CombatConfig.Speeds
 
 local MovementController = {}
 
 -- Fired whenever something the HUD shows changes.
 MovementController.Changed = Signal.new()
+
+-- Set by the combat controller: called after every dash (for its i-frames).
+MovementController.OnDash = nil :: ((Vector3) -> ())?
 
 MovementController.State = {
 	Sprinting = false,
@@ -51,25 +58,63 @@ local leftGroundAt = 0
 local lastJumpRequest = 0
 local pendingBoard = false
 
-local function inArena(): boolean
-	return player:GetAttribute("InArena") == true
+local function now(): number
+	return Workspace:GetServerTimeNow()
+end
+
+-- Dealt or took damage in the last few seconds.
+local function inCombat(): boolean
+	local last = player:GetAttribute(CombatConfig.PlayerAttributes.LastCombat)
+	return type(last) == "number" and now() - last < CombatConfig.InCombatTime
+end
+
+local function active(attribute: string): boolean
+	return character ~= nil and (character:GetAttribute(attribute) or 0) > now()
 end
 
 local function grounded(): boolean
 	return humanoid ~= nil and humanoid.FloorMaterial ~= Enum.Material.Air
 end
 
+-- Walk speed and jump from movement state and combat status (stun, block,
+-- wind-ups, beast form). Applied every frame, written only when it changes.
+local lastSpeed, lastJump = -1, -1
 local function applySpeed()
-	if not humanoid or inArena() then
+	if not humanoid or not character then
 		return
 	end
 	local speed
+	local beast = character:GetAttribute(STATUS.Beast)
 	if state.Riding then
 		speed = if state.Sprinting then BOARD.SprintSpeed else BOARD.Speed
+	elseif beast and GemKits.Beasts[beast] then
+		speed = GemKits.Beasts[beast].Speed * (if state.Sprinting then SPRINT.Multiplier else 1)
 	else
 		speed = MovementConfig.WalkSpeed * (if state.Sprinting then SPRINT.Multiplier else 1)
 	end
-	humanoid.WalkSpeed = speed
+	local jump = if state.Riding then BOARD.JumpHeight else 7.2
+	if character:GetAttribute(STATUS.Shattered) == true or active(STATUS.StunnedUntil) then
+		speed, jump = SPEEDS.Stunned, 0
+	elseif active(STATUS.RootedUntil) then
+		speed, jump = SPEEDS.Rooted, 0
+	elseif character:GetAttribute(STATUS.Blocking) == true then
+		speed, jump = math.min(speed, SPEEDS.Blocking), 0
+	elseif active(STATUS.SlowUntil) then
+		speed = math.min(speed, SPEEDS.Beam)
+	elseif active(STATUS.SlowedUntil) then
+		speed = math.min(speed, SPEEDS.Slowed)
+	elseif active(STATUS.BusyUntil) then
+		speed = math.min(speed, SPEEDS.Busy)
+	end
+	if speed ~= lastSpeed or humanoid.WalkSpeed ~= speed then
+		lastSpeed = speed
+		humanoid.WalkSpeed = speed
+	end
+	if jump ~= lastJump then
+		lastJump = jump
+		humanoid.UseJumpPower = false
+		humanoid.JumpHeight = jump
+	end
 end
 
 local function changed()
@@ -99,6 +144,9 @@ function MovementController.Dash()
 	end
 	local now = os.clock()
 	if now < state.DashReadyAt then
+		return
+	end
+	if character and (character:GetAttribute(STATUS.Shattered) == true or active(STATUS.StunnedUntil) or active(STATUS.RootedUntil)) then
 		return
 	end
 	if not grounded() then
@@ -147,6 +195,9 @@ function MovementController.Dash()
 	end
 	local fxRemote = remotes:WaitForChild("MovementFX") :: RemoteEvent
 	fxRemote:FireServer("Dash", direction)
+	if MovementController.OnDash then
+		MovementController.OnDash(direction)
+	end
 	MovementController.Changed:Fire()
 end
 
@@ -218,13 +269,16 @@ local function applyRiding(on: boolean)
 	if humanoid.RigType == Enum.HumanoidRigType.R15 then
 		humanoid.HipHeight = baseHip + (if on then BOARD.Lift else 0)
 	end
-	humanoid.JumpHeight = if on then BOARD.JumpHeight else 7.2
+	lastJump = -1
 	setRidingPose(on)
 	changed()
 end
 
 function MovementController.CanRide(): boolean
-	return BOARD.AllowedInArena or not inArena()
+	if character and character:GetAttribute(STATUS.Beast) then
+		return false
+	end
+	return BOARD.AllowedInCombat or not inCombat()
 end
 
 function MovementController.ToggleHoverboard()
@@ -316,6 +370,7 @@ end
 
 -- Field of view widens with speed.
 local function updateCamera(dt: number)
+	applySpeed()
 	local camera = Workspace.CurrentCamera
 	if not camera or not humanoid then
 		return
@@ -342,10 +397,12 @@ function MovementController.Start()
 	end)
 	RunService.RenderStepped:Connect(updateCamera)
 
-	-- Entering or leaving the arena hands walk speed over to / back from combat.
-	player:GetAttributeChangedSignal("InArena"):Connect(function()
-		applySpeed()
+	-- Entering or leaving combat changes whether the board can be summoned.
+	player:GetAttributeChangedSignal(CombatConfig.PlayerAttributes.LastCombat):Connect(function()
 		MovementController.Changed:Fire()
+		task.delay(CombatConfig.InCombatTime + 0.1, function()
+			MovementController.Changed:Fire()
+		end)
 	end)
 
 	player.CharacterAdded:Connect(onCharacter)
