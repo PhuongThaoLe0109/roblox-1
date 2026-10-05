@@ -22,9 +22,8 @@ local RunService = game:GetService("RunService")
 
 assert(RunService:IsServer(), "GemDataManager can only be required on the server")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
-local GemConfig = require(Shared:WaitForChild("GemConfig"))
-local Signal = require(Shared:WaitForChild("Signal"))
+local GemConfig = require(ReplicatedStorage:WaitForChild("GemConfig"))
+local Signal = require(ReplicatedStorage:WaitForChild("Signal"))
 
 local DS = GemConfig.DataStore
 local ATTR = GemConfig.Attributes

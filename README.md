@@ -5,12 +5,13 @@ Luau source for a Steven Universe–inspired multiplayer Roblox game, laid out f
 
 ```
 src/
-  shared/                      -> ReplicatedStorage.Shared
+  shared/                      -> ReplicatedStorage
     GemConfig.luau             gem types, placements, factions, ranks, DataStore + attribute config
     Signal.luau                leak-safe event object
-  server/                      -> ServerScriptService.Server
+  server/                      -> ServerScriptService
     GemDataBootstrap.server.luau   starts the manager, creates ReplicatedStorage.GemRemotes
     Modules/GemDataManager.luau    persistence, session locking, gem attachment, faction/essence API
+  client/                      -> StarterPlayer.StarterPlayerScripts
 ```
 
 ## Replication contract
