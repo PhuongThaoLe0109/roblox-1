@@ -1,7 +1,6 @@
 -- Main (client entry point)
--- Starts world visuals (sky, ambient motion), movement, and builds the HUD.
--- All UI lives in one ScreenGui that survives respawns; a UIScale keeps it
--- readable from phones to 4K monitors.
+-- Builds the lobby UI in one ScreenGui that survives respawns; a UIScale keeps
+-- it readable from phones to 4K monitors.
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -9,21 +8,15 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local SkyCycle = require(script.Parent:WaitForChild("SkyCycle"))
-local AmbientFX = require(script.Parent:WaitForChild("AmbientFX"))
-local Movement = require(script.Parent:WaitForChild("Movement"))
-
+local ClientData = require(script.Parent:WaitForChild("ClientData"))
 local UI = script.Parent:WaitForChild("UI")
-local LoadingScreen = require(UI:WaitForChild("LoadingScreen"))
-local Hud = require(UI:WaitForChild("Hud"))
-local TerritoryBar = require(UI:WaitForChild("TerritoryBar"))
-local MapPanel = require(UI:WaitForChild("MapPanel"))
-local FactionSelect = require(UI:WaitForChild("FactionSelect"))
-local Toasts = require(UI:WaitForChild("Toasts"))
-local PortalLabels = require(UI:WaitForChild("PortalLabels"))
+local RollReveal = require(UI:WaitForChild("RollReveal"))
+local Announcements = require(UI:WaitForChild("Announcements"))
+local Inventory = require(UI:WaitForChild("Inventory"))
+local LobbyHud = require(UI:WaitForChild("LobbyHud"))
 
 local screen = Instance.new("ScreenGui")
-screen.Name = "GemHUD"
+screen.Name = "PrismUI"
 screen.ResetOnSpawn = false
 screen.IgnoreGuiInset = true
 screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -31,46 +24,38 @@ screen.Parent = playerGui
 
 local uiScale = Instance.new("UIScale")
 uiScale.Parent = screen
-
 local function rescale()
 	local camera = Workspace.CurrentCamera
-	if not camera then
-		return
+	if camera then
+		local size = camera.ViewportSize
+		uiScale.Scale = math.clamp(math.min(size.X / 1366, size.Y / 768), 0.55, 1.3)
 	end
-	local viewport = camera.ViewportSize
-	uiScale.Scale = math.clamp(math.min(viewport.X / 1280, viewport.Y / 760), 0.6, 1.25)
 end
 rescale()
 if Workspace.CurrentCamera then
 	Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
 end
 
--- Shared hooks between UI modules (filled in by the modules that own them).
+-- Hooks shared between UI modules (filled in by their owners).
 local context = {
-	SkyCycle = SkyCycle,
-	ToggleMap = function(_open: boolean?) end,
-	OpenFactionSelect = function() end,
 	Toast = function(_text: string, _kind: string?) end,
+	ToggleInventory = function(_open: boolean?) end,
+	SetLobbyVisible = function(_visible: boolean) end,
+	InLobby = function(): boolean
+		return true -- the arena arrives with the combat PR
+	end,
 }
 
-LoadingScreen.Init(screen)
-SkyCycle.Start()
-AmbientFX.Start()
-Movement.Start()
+ClientData.Start()
+RollReveal.Init(screen)
 
--- Each module is isolated so one failure doesn't take down the whole HUD.
-for name, module in {
-	Toasts = Toasts,
-	Hud = Hud,
-	TerritoryBar = TerritoryBar,
-	MapPanel = MapPanel,
-	FactionSelect = FactionSelect,
-	PortalLabels = PortalLabels,
+for _, entry in {
+	{ "Announcements", Announcements },
+	{ "Inventory", Inventory },
+	{ "LobbyHud", LobbyHud },
 } do
-	task.spawn(function()
-		local ok, err = pcall(module.Init, screen, context)
-		if not ok then
-			warn(`[UI] {name} failed to initialise: {err}`)
-		end
-	end)
+	local ok, err = pcall(entry[2].Init, screen, context)
+	if not ok then
+		warn(`[UI] {entry[1]} failed to initialise: {err}`)
+	end
 end
