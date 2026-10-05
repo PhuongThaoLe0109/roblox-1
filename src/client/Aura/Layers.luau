@@ -21,6 +21,8 @@ export type Context = {
 	Ground: number, -- offset from the root down to the feet (negative)
 	Place: (BasePart, CFrame) -> (),
 	Rng: Random,
+	Character: Model?, -- the wearer (limb-following layers); nil for previews
+	Eye: (() -> Vector3)?, -- camera position, only for the local player's own aura
 }
 
 export type Update = (t: number, root: CFrame) -> ()
@@ -645,6 +647,384 @@ function Layers.Monoliths(ctx: Context, spec): Update
 			ctx.Place(m.Shell, cf)
 			ctx.Place(m.Core, cf)
 		end
+	end
+end
+
+--------------------------------------------------------------------------------
+-- Power-up layers: flames, charge glow, crystal armour, diadem and the giant
+-- crystal form.
+--------------------------------------------------------------------------------
+
+-- How each flame style burns.
+local FLAME_STYLES = {
+	Blaze = { Sway = 0.7, Speed = 6, Width = 1.5, Jitter = 0.35, Curve = 1.3, Count = 1, Rise = 1 },
+	Spike = { Sway = 0.25, Speed = 11, Width = 1.0, Jitter = 0.55, Curve = 0.4, Count = 1.2, Rise = 1.15 },
+	Wisp = { Sway = 1.5, Speed = 2.6, Width = 2.0, Jitter = 0.25, Curve = 2.6, Count = 0.8, Rise = 0.9 },
+	Torrent = { Sway = 0.3, Speed = 14, Width = 0.6, Jitter = 0.4, Curve = 0.5, Count = 1.7, Rise = 1.1 },
+	Inferno = { Sway = 0.9, Speed = 8, Width = 1.9, Jitter = 0.45, Curve = 1.6, Count = 1.3, Rise = 1.3 },
+	Frost = { Sway = 0.5, Speed = 2, Width = 1.4, Jitter = 0.2, Curve = 0.9, Count = 1, Rise = 0.95, Pale = 0.45 },
+	Void = { Sway = 1.1, Speed = 4, Width = 1.8, Jitter = 0.3, Curve = 1.8, Count = 1, Rise = 1.05, Dark = true },
+	Electric = { Sway = 0.2, Speed = 18, Width = 0.9, Jitter = 0.7, Curve = 0.3, Count = 1.2, Rise = 1.1, Flicker = true },
+}
+Layers.FlameStyles = FLAME_STYLES
+
+-- The power-up aura: tongues of light bursting up from the whole body, in
+-- up to three shells (white-hot core, gem colour, faint accent halo).
+-- { Style, Count, Height, Radius, Width, Shells }
+function Layers.Flame(ctx: Context, spec): Update
+	local style = FLAME_STYLES[spec.Style or "Blaze"] or FLAME_STYLES.Blaze
+	local count = math.max(6, math.floor((spec.Count or 12) * style.Count + 0.5))
+	local height = (spec.Height or 6) * style.Rise
+	local radius = spec.Radius or 1.6
+	local baseWidth = (spec.Width or 1) * style.Width
+	local shells = spec.Shells or 2
+	local h = host(ctx)
+
+	local color, accent = ctx.Color, ctx.Accent
+	if style.Pale then
+		color = lerp(color, WHITE, style.Pale)
+		accent = lerp(accent, WHITE, style.Pale * 0.6)
+	end
+
+	type Tongue = { A0: Attachment, A1: Attachment, Beam: Beam, Angle: number, Base: Vector3, Out: Vector3, Spin: CFrame, Phase: number, Height: number, Width: number, Rate: number }
+	local tongues: { Tongue } = {}
+
+	local SHELLS = {
+		{ Radius = 0.8, Height = 0.75, Width = 0.6, Transparency = 0.5, Colors = { lerp(WHITE, color, 0.35), lerp(WHITE, color, 0.7), color } },
+		{ Radius = 1.05, Height = 1, Width = 1, Transparency = 0.4, Colors = { lerp(WHITE, color, 0.75), color, accent } },
+		{ Radius = 1.35, Height = 1.25, Width = 1.45, Transparency = 0.7, Colors = { color, accent, accent } },
+	}
+	for shellIndex = 1, math.clamp(shells, 1, 3) do
+		local shell = SHELLS[shellIndex]
+		local dark = style.Dark and shellIndex == 1
+		local colors = shell.Colors
+		if dark then
+			local deep = lerp(color, Color3.new(0, 0, 0), 0.82)
+			colors = { Color3.new(0, 0, 0), deep, lerp(deep, accent, 0.4) }
+		end
+		local n = if shellIndex == 1 then math.ceil(count * 0.45) else count
+		for i = 1, n do
+			local angle = (i - 1) / n * TAU + ctx.Rng:NextNumber() * 0.4 + shellIndex * 0.37
+			-- Bodies are wider than they are deep.
+			local out = Vector3.new(math.cos(angle), 0, math.sin(angle) * 0.7)
+			local base = out * radius * shell.Radius + Vector3.new(0, ctx.Ground + 0.3 + ctx.Rng:NextNumber() * 3.2, 0)
+			local spin = CFrame.Angles(0, -angle + math.pi / 2, 0)
+			local a0 = Instance.new("Attachment")
+			a0.CFrame = CFrame.new(base) * spin
+			a0.Parent = h
+			local a1 = Instance.new("Attachment")
+			a1.CFrame = CFrame.new(base + Vector3.new(0, height, 0)) * spin
+			a1.Parent = h
+			local beam = Instance.new("Beam")
+			beam.Attachment0 = a0
+			beam.Attachment1 = a1
+			beam.Segments = 8
+			beam.FaceCamera = true
+			beam.LightEmission = if dark then 0 else 1
+			beam.LightInfluence = 0
+			beam.Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, colors[1]),
+				ColorSequenceKeypoint.new(0.45, colors[2]),
+				ColorSequenceKeypoint.new(1, colors[3]),
+			})
+			local t0 = if dark then 0.15 else shell.Transparency
+			beam.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, math.min(1, t0 + 0.35)),
+				NumberSequenceKeypoint.new(0.3, t0),
+				NumberSequenceKeypoint.new(0.7, math.min(1, t0 + 0.2)),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			local width = baseWidth * shell.Width * (0.75 + ctx.Rng:NextNumber() * 0.5)
+			beam.Width0 = width
+			beam.Width1 = width * 0.08
+			beam.Parent = h
+			table.insert(tongues, {
+				A0 = a0,
+				A1 = a1,
+				Beam = beam,
+				Angle = angle,
+				Base = base,
+				Out = out,
+				Spin = spin,
+				Phase = ctx.Rng:NextNumber() * TAU,
+				Height = height * shell.Height * (0.7 + ctx.Rng:NextNumber() * 0.5),
+				Width = width,
+				Rate = style.Speed * (0.8 + ctx.Rng:NextNumber() * 0.4),
+			})
+		end
+	end
+
+	return function(t, root)
+		ctx.Place(h, root)
+		for _, tongue in tongues do
+			local p = t * tongue.Rate + tongue.Phase
+			local flick = 0.5 + 0.25 * math.sin(p) + 0.25 * math.sin(p * 2.3 + 1.7)
+			local hgt = tongue.Height * (1 - style.Jitter + style.Jitter * flick)
+			local sway = math.sin(p * 0.37) * style.Sway
+			local tip = tongue.Base + tongue.Out * (0.5 + 0.3 * flick) + Vector3.new(0, hgt, 0)
+			tongue.A1.CFrame = CFrame.new(tip) * tongue.Spin * CFrame.new(sway, 0, 0)
+			local beam = tongue.Beam
+			beam.CurveSize0 = style.Curve * math.sin(p * 0.6)
+			beam.CurveSize1 = -style.Curve * math.cos(p * 0.45)
+			beam.Width0 = tongue.Width * (0.8 + 0.35 * flick)
+			if style.Flicker then
+				beam.Enabled = math.sin(p * 3.1) > -0.55
+			end
+		end
+	end
+end
+
+-- The wearer's body glows in the gem's colours, breathing with the flames.
+-- { Fill, Outline, Speed }
+function Layers.Charge(ctx: Context, spec): Update
+	local character = ctx.Character
+	if not character then
+		return function() end
+	end
+	local highlight = Instance.new("Highlight")
+	highlight.Name = "Charge"
+	highlight.Adornee = character
+	highlight.FillColor = ctx.Color
+	highlight.OutlineColor = lerp(ctx.Accent, WHITE, 0.3)
+	highlight.DepthMode = Enum.HighlightDepthMode.Occluded
+	highlight.FillTransparency = spec.Fill or 0.75
+	highlight.OutlineTransparency = spec.Outline or 0.15
+	highlight.Parent = ctx.Parent
+	local base = highlight.FillTransparency
+	local speed = spec.Speed or 3
+	return function(t)
+		highlight.FillTransparency = math.clamp(base + 0.08 * math.sin(t * speed), 0, 1)
+	end
+end
+
+local function limb(character: Model?, names: { string }): BasePart?
+	if not character then
+		return nil
+	end
+	for _, name in names do
+		local p = character:FindFirstChild(name)
+		if p and p:IsA("BasePart") then
+			return p
+		end
+	end
+	return nil
+end
+
+-- Crystal armour growing on the body: pauldrons, a chest gem, gauntlets and
+-- crystals along the back. Follows the limbs (falls back to the root).
+-- { Gauntlets, Back, Scale }
+function Layers.Armor(ctx: Context, spec): Update
+	local scale = spec.Scale or 1
+	type Piece = { Part: BasePart, Limb: { string }, Offset: CFrame, Fallback: CFrame }
+	local pieces: { Piece } = {}
+	local function add(p: BasePart, limbNames: { string }, offset: CFrame, fallback: CFrame)
+		table.insert(pieces, { Part = p, Limb = limbNames, Offset = offset, Fallback = fallback })
+	end
+	local TORSO = { "UpperTorso", "Torso" }
+	for side = -1, 1, 2 do
+		local arm = if side < 0 then { "LeftUpperArm", "Left Arm" } else { "RightUpperArm", "Right Arm" }
+		local shoulder = CFrame.new(side * 1.5, 0.9, 0)
+		for k = 1, 3 do
+			local length = scale * (1.1 + k * 0.35)
+			local color = if k == 2 then ctx.Accent else ctx.Color
+			local tilt = CFrame.Angles(math.rad(-10 + k * 12), 0, -side * math.rad(25 + k * 22))
+			add(shard(ctx, 0.32 * scale, length, color, true), arm, CFrame.new(side * 0.2, 0.55, 0) * tilt * CFrame.new(0, length / 2, 0) * CFrame.Angles(0, math.rad(45), 0), shoulder * tilt * CFrame.new(0, length / 2, 0))
+			add(shard(ctx, 0.14 * scale, length * 0.85, lerp(color, WHITE, 0.5)), arm, CFrame.new(side * 0.2, 0.55, 0) * tilt * CFrame.new(0, length / 2, 0) * CFrame.Angles(0, math.rad(45), 0), shoulder * tilt * CFrame.new(0, length / 2, 0))
+		end
+		if spec.Gauntlets then
+			local fore = if side < 0 then { "LeftLowerArm", "Left Arm" } else { "RightLowerArm", "Right Arm" }
+			for k = 1, 2 do
+				local back = CFrame.new(side * 0.25, -0.1 * k, 0.35) * CFrame.Angles(math.rad(35 + k * 15), 0, -side * math.rad(15))
+				add(shard(ctx, 0.22 * scale, 1.1 * scale, if k == 1 then ctx.Color else ctx.Accent), fore, back * CFrame.new(0, 0.5 * scale, 0), CFrame.new(side * 1.6, -0.6, 0.4))
+			end
+		end
+	end
+	-- Chest gem
+	local chestShell, chestCore = gemPair(ctx, 0.7 * scale, ctx.Color)
+	add(chestShell, TORSO, CFrame.new(0, 0.25, -0.55) * GEM_TILT, CFrame.new(0, 0.6, -0.6) * GEM_TILT)
+	add(chestCore, TORSO, CFrame.new(0, 0.25, -0.55) * GEM_TILT, CFrame.new(0, 0.6, -0.6) * GEM_TILT)
+	-- Crystals along the back
+	for k = 1, spec.Back or 0 do
+		local x = (k - (spec.Back + 1) / 2) * 0.55
+		local length = scale * (1.4 + (if k % 2 == 0 then 0.6 else 0))
+		local tilt = CFrame.Angles(math.rad(35), 0, -x * 0.4)
+		add(shard(ctx, 0.3 * scale, length, if k % 2 == 0 then ctx.Accent else ctx.Color, true), TORSO, CFrame.new(x, 0.3, 0.55) * tilt * CFrame.new(0, length / 2, 0) * CFrame.Angles(0, math.rad(45), 0), CFrame.new(x, 0.6, 0.6) * tilt * CFrame.new(0, length / 2, 0))
+	end
+
+	return function(t, root)
+		local pulse = CFrame.new(0, math.sin(t * 2) * 0.03, 0)
+		for _, piece in pieces do
+			local anchor = limb(ctx.Character, piece.Limb)
+			if anchor then
+				ctx.Place(piece.Part, anchor.CFrame * piece.Offset * pulse)
+			else
+				ctx.Place(piece.Part, root * piece.Fallback * pulse)
+			end
+		end
+	end
+end
+
+-- A crystalline crest of "hair" fanned up from the back of the head, with a
+-- gem on the brow.
+-- { Spikes, Height, Style ("Spire" | "Crown") }
+function Layers.Diadem(ctx: Context, spec): Update
+	local spikes = spec.Spikes or 5
+	local height = spec.Height or 1.6
+	local HEAD = { "Head" }
+	type Piece = { Part: BasePart, Offset: CFrame }
+	local pieces: { Piece } = {}
+	for k = 1, spikes do
+		local u = (k - 1) / math.max(1, spikes - 1) - 0.5
+		local length = height * (1 - math.abs(u) * 0.8)
+		local lean = if spec.Style == "Crown" then CFrame.Angles(math.rad(-10), 0, -u * 1.3) else CFrame.Angles(math.rad(28), 0, -u * 1.1)
+		local offset = CFrame.new(u * 0.8, 0.45, 0.25) * lean * CFrame.new(0, length / 2, 0) * CFrame.Angles(0, math.rad(45), 0)
+		table.insert(pieces, { Part = shard(ctx, 0.36, length, grad(ctx, 0.3 + 0.6 * math.abs(u) * 2), true), Offset = offset })
+		table.insert(pieces, { Part = shard(ctx, 0.15, length * 0.9, lerp(ctx.Color, WHITE, 0.5)), Offset = offset })
+	end
+	local browShell, browCore = gemPair(ctx, 0.32, ctx.Accent)
+	table.insert(pieces, { Part = browShell, Offset = CFrame.new(0, 0.25, -0.6) * GEM_TILT })
+	table.insert(pieces, { Part = browCore, Offset = CFrame.new(0, 0.25, -0.6) * GEM_TILT })
+	return function(t, root)
+		local head = limb(ctx.Character, HEAD)
+		local frame = if head then head.CFrame else root * CFrame.new(0, 1.6, 0)
+		local breathe = CFrame.new(0, math.sin(t * 1.6) * 0.04, 0)
+		for _, piece in pieces do
+			ctx.Place(piece.Part, frame * breathe * piece.Offset)
+		end
+	end
+end
+
+-- The transformation: a giant translucent crystal sovereign rising behind the
+-- wearer, mirroring their facing, with glowing eyes, a chest gem, great
+-- pauldrons and a crystalline crest.
+-- { Scale, Variant ("Spire" | "Bloom" | "Halo"), Behind }
+function Layers.Colossus(ctx: Context, spec): Update
+	local S = spec.Scale or 3
+	local behind = spec.Behind or S * 1.5
+	local variant = spec.Variant or "Spire"
+	local body = lerp(ctx.Color, WHITE, 0.15)
+	local glassT = 0.55
+	type Piece = { Part: BasePart, Offset: CFrame, Group: string }
+	local pieces: { Piece } = {}
+	local function add(p: BasePart, offset: CFrame, group: string?)
+		table.insert(pieces, { Part = p, Offset = offset, Group = group or "Body" })
+	end
+	local function glass(size: Vector3, color: Color3?): Part
+		return part(ctx, size, color or body, Enum.Material.Glass, glassT)
+	end
+
+	-- Gown: a tall faceted skirt, wider at the hem.
+	add(glass(Vector3.new(S * 2.4, S * 2.4, S * 1.5)), CFrame.new(0, S * 1.2, 0))
+	add(glass(Vector3.new(S * 1.7, S * 1.7, S * 1.7), ctx.Accent), CFrame.new(0, S * 0.6, 0) * CFrame.Angles(0, math.rad(45), 0))
+	-- Torso and waist
+	add(glass(Vector3.new(S * 1.5, S * 1.5, S * 0.9)), CFrame.new(0, S * 3.1, 0))
+	add(glass(Vector3.new(S * 1.0, S * 0.5, S * 0.8), ctx.Accent), CFrame.new(0, S * 2.4, 0))
+	-- Chest gem
+	local chestShell, chestCore = gemPair(ctx, S * 0.5, ctx.Color)
+	chestShell.Transparency = 0.25
+	add(chestShell, CFrame.new(0, S * 3.2, -S * 0.5) * GEM_TILT)
+	add(chestCore, CFrame.new(0, S * 3.2, -S * 0.5) * GEM_TILT)
+	-- Pauldrons: fans of great shards on each shoulder.
+	for side = -1, 1, 2 do
+		for k = 1, 3 do
+			local length = S * (0.9 + k * 0.3)
+			local tilt = CFrame.Angles(math.rad(8 * k), 0, -side * math.rad(12 + k * 14))
+			add(part(ctx, Vector3.new(S * 0.4, length, S * 0.4), if k == 2 then ctx.Accent else ctx.Color, Enum.Material.Glass, 0.35), CFrame.new(side * S * (0.6 + k * 0.12), S * 3.75, S * 0.1 * k) * tilt * CFrame.new(0, length / 2, 0) * CFrame.Angles(0, math.rad(45), 0))
+		end
+		-- Arms (animated)
+		add(glass(Vector3.new(S * 0.42, S * 1.5, S * 0.42)), CFrame.new(0, -S * 0.75, 0), if side < 0 then "LeftArm" else "RightArm")
+		add(glass(Vector3.new(S * 0.36, S * 1.3, S * 0.36)), CFrame.new(0, -S * 2.05, -S * 0.25) * CFrame.Angles(math.rad(-20), 0, 0), if side < 0 then "LeftArm" else "RightArm")
+		add(part(ctx, Vector3.new(S * 0.3, S * 0.3, S * 0.3), lerp(ctx.Accent, WHITE, 0.4)), CFrame.new(0, -S * 2.8, -S * 0.5) * GEM_TILT, if side < 0 then "LeftArm" else "RightArm")
+	end
+	-- Neck and head: a cut-gem face.
+	add(glass(Vector3.new(S * 0.4, S * 0.5, S * 0.4)), CFrame.new(0, S * 4.0, 0))
+	add(glass(Vector3.new(S * 0.95, S * 1.1, S * 0.95)), CFrame.Angles(0, math.rad(45), 0), "Head")
+	for side = -1, 1, 2 do
+		add(part(ctx, Vector3.new(S * 0.2, S * 0.09, S * 0.05), WHITE), CFrame.new(side * S * 0.22, S * 0.08, -S * 0.66), "Head")
+	end
+	-- Crest
+	if variant == "Bloom" then
+		local puff = part(ctx, Vector3.one * S * 1.7, ctx.Accent, Enum.Material.Glass, 0.45)
+		puff.Shape = Enum.PartType.Ball
+		add(puff, CFrame.new(0, S * 0.45, S * 0.55), "Head")
+		for side = -1, 1, 2 do
+			local small = part(ctx, Vector3.one * S * 0.9, ctx.Color, Enum.Material.Glass, 0.45)
+			small.Shape = Enum.PartType.Ball
+			add(small, CFrame.new(side * S * 0.8, S * 0.1, S * 0.4), "Head")
+		end
+	else
+		local n = if variant == "Halo" then 7 else 5
+		for k = 1, n do
+			local u = (k - 1) / (n - 1) - 0.5
+			local length = S * (if variant == "Halo" then 1.1 else 1.9) * (1 - math.abs(u) * 0.7)
+			local lean = if variant == "Halo" then CFrame.Angles(0, 0, -u * 2.6) else CFrame.Angles(math.rad(20), 0, -u * 1.2)
+			add(part(ctx, Vector3.new(S * 0.32, length, S * 0.32), grad(ctx, 0.3 + math.abs(u)), Enum.Material.Glass, 0.3), CFrame.new(0, S * 0.45, S * 0.3) * lean * CFrame.new(0, length / 2, 0) * CFrame.Angles(0, math.rad(45), 0), "Head")
+		end
+	end
+	-- Light halo behind the head.
+	local h = host(ctx)
+	ribbon(ctx, h, circle(S * 1.25, 36), S * 0.12, function(u)
+		return grad(ctx, 0.2 + 0.7 * (0.5 + 0.5 * math.sin(u * TAU * 3)))
+	end, 0.2)
+	-- Silhouette glow.
+	local outline = Instance.new("Highlight")
+	outline.FillColor = ctx.Color
+	outline.FillTransparency = 0.7
+	outline.OutlineColor = lerp(ctx.Accent, WHITE, 0.4)
+	outline.OutlineTransparency = 0.1
+	outline.DepthMode = Enum.HighlightDepthMode.Occluded
+	outline.Parent = ctx.Parent
+
+	-- Collect the colossus parts into their own model so the highlight wraps
+	-- only them.
+	local model = Instance.new("Model")
+	model.Name = "Colossus"
+	model.Parent = ctx.Parent
+	for _, piece in pieces do
+		piece.Part.Parent = model
+	end
+	outline.Adornee = model
+
+	-- Fade out while the camera is inside or right behind the giant (only for
+	-- the wearer's own view), so it never blocks your sight.
+	local partsOnly: { BasePart } = {}
+	local baseTransparency: { number } = {}
+	for i, piece in pieces do
+		partsOnly[i] = piece.Part
+		baseTransparency[i] = piece.Part.Transparency
+	end
+	local fade = 0
+
+	return function(t, root)
+		local bob = math.sin(t * 0.9) * S * 0.08
+		if ctx.Eye then
+			local center = (root * CFrame.new(0, S * 2.5, behind)).Position
+			local d = (ctx.Eye() - center).Magnitude
+			local target = math.clamp((S * 4.5 - d) / (S * 2), 0, 1) * 0.85
+			if math.abs(target - fade) > 0.02 then
+				fade = target
+				for i, p in partsOnly do
+					p.Transparency = baseTransparency[i] + (1 - baseTransparency[i]) * fade
+				end
+				outline.Enabled = fade < 0.5
+			end
+		end
+		local frame = root * CFrame.new(0, ctx.Ground + bob, behind)
+		local breath = math.sin(t * 0.9)
+		local arms = {
+			LeftArm = frame * CFrame.new(-S * 1.0, S * 3.6, 0) * CFrame.Angles(math.rad(10 + breath * 4), 0, math.rad(12 + breath * 3)),
+			RightArm = frame * CFrame.new(S * 1.0, S * 3.6, 0) * CFrame.Angles(math.rad(10 - breath * 4), 0, -math.rad(12 + breath * 3)),
+			Head = frame * CFrame.new(0, S * 4.75, 0) * CFrame.Angles(math.rad(-6 + breath * 2), math.sin(t * 0.4) * 0.12, 0),
+		}
+		for _, piece in pieces do
+			local group = arms[piece.Group]
+			if group then
+				ctx.Place(piece.Part, group * piece.Offset)
+			else
+				ctx.Place(piece.Part, frame * piece.Offset)
+			end
+		end
+		ctx.Place(h, arms.Head * CFrame.new(0, 0, S * 0.7) * CFrame.Angles(math.rad(90), t * 0.3, 0))
 	end
 end
 

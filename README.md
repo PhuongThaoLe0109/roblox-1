@@ -28,7 +28,14 @@ from the wearer's `EquippedGem`. Auras are built from shared layers (`src/client
 rings and star sigils, orbiting gems and comets, rising motes, embers, petals and snow, crystal wings, crowns,
 light helixes, shard mandalas, light pillars, floating crests, starfields, lightning, eclipses, pulses and monoliths.
 
-- Rarer gems wear more layers and reach further: from a single quiet sigil (Quartz) to eight layers for The First Light.
+- **Power-up** for every gem: tongues of light burst up from the whole body like a powered-up fighter. There are 8 burn styles
+  (Blaze, Spike, Wisp, Torrent, Inferno, Frost, dark-cored Void, flickering Electric) and the body glows in the gem's colours.
+  The flames grow taller, denser and gain a third shell with rarity.
+- Then, by rarity: rising sparks (1 in 120+), crystal armour on the shoulders and chest (1 in 100,000+),
+  gauntlets, back crystals and a crystal diadem (1 in 10,000,000+), and from 1 in 750,000,000 a **transformation**:
+  a giant translucent crystal sovereign rises behind the wearer (three crest variants, growing with rarity).
+  It fades out when it would block your own camera.
+- On top of that, each gem keeps its own signature layers (Recipes): from a quiet sigil (Quartz) to eight layers for The First Light.
 - Colours always come from the gem, so no two auras look alike.
 - Only Neon / Glass parts, untextured Beams and Trails, and PointLights; no textures, decals, meshes or ParticleEmitters.
 - One `Workspace:BulkMoveTo` per frame; auras far from the camera are paused and hidden.

@@ -9,6 +9,8 @@
 -- measures from the feet. Every aura also gets a breathing Glow light sized
 -- by rarity (added by the renderer).
 
+local Recipes = {}
+
 local function L(kind: string)
 	return function(spec: { [string]: any }): { [string]: any }
 		spec.Kind = kind
@@ -203,8 +205,87 @@ local R: { [string]: { { [string]: any } } } = {
 	},
 }
 
-local Recipes = {}
+--------------------------------------------------------------------------------
+-- Power-up: every aura also bursts into flame around the body, glows, and the
+-- rarer ones grow crystal armour, a diadem and finally transform with a giant
+-- crystal sovereign rising behind them. All of it scales with rarity.
+--------------------------------------------------------------------------------
 
+-- How each gem's flame burns (default: by position in the catalogue).
+local FLAME_STYLE: { [string]: string } = {
+	-- fire
+	Carnelian = "Inferno", Ruby = "Inferno", Garnet = "Inferno", Sunstone = "Inferno", FireOpal = "Inferno",
+	Emberglass = "Inferno", SunflareTopaz = "Inferno", Solarite = "Inferno", SupernovaDiamond = "Inferno", RedBeryl = "Inferno",
+	-- ice and water
+	Quartz = "Frost", Moonstone = "Frost", Aquamarine = "Frost", Larimar = "Frost", Diamond = "Frost",
+	Starquartz = "Frost", FrostheartSpinel = "Frost", Lunarine = "Frost", Calcite = "Frost",
+	-- shadow
+	Onyx = "Void", Obsidian = "Void", Hematite = "Void", Voidshard = "Void", DuskmereOnyx = "Void",
+	Eclipsium = "Void", SingularityGem = "Void", AbyssalSapphire = "Void", Riftstone = "Void", Serendibite = "Void",
+	-- storm
+	Pyrite = "Electric", Charoite = "Electric", Musgravite = "Electric", Stormcore = "Electric", Thunderjade = "Electric",
+	Paradoxite = "Electric", PrimordialShard = "Electric",
+	-- soft and dreamy
+	Kunzite = "Wisp", Morganite = "Wisp", Rhodonite = "Wisp", Bloomstone = "Wisp", Dreamglass = "Wisp",
+	MoonveilOpal = "Wisp", Etherveil = "Wisp", Auroralite = "Wisp", Nebulite = "Wisp", MirageOpal = "Wisp",
+	-- rising light
+	Seraphite = "Torrent", Aetherium = "Torrent", Dawnspire = "Torrent", NovaPrism = "Torrent", Quasarine = "Torrent",
+	TheFirstLight = "Torrent", Wishstone = "Torrent", Starheart = "Torrent",
+}
+local CYCLE = { "Blaze", "Spike", "Blaze", "Wisp", "Spike", "Torrent" }
+
+local COLOSSUS_VARIANT = { "Spire", "Bloom", "Halo" }
+
+local cache: { [string]: { { [string]: any } } } = {}
+
+-- The full layer list for a gem: power-up layers + its signature recipe.
+function Recipes.Build(gem: { Id: string, Index: number }): { { [string]: any } }?
+	local signature = R[gem.Id]
+	if not signature then
+		return nil
+	end
+	local cached = cache[gem.Id]
+	if cached then
+		return cached
+	end
+	local i = gem.Index
+	local list: { { [string]: any } } = {}
+
+	-- Flames for everyone, from a strong burn to a towering inferno.
+	table.insert(list, L("Flame")({
+		Style = FLAME_STYLE[gem.Id] or CYCLE[i % #CYCLE + 1],
+		Count = 12 + i * 0.22,
+		Height = 5.5 + i * 0.085,
+		Radius = 1.55 + i * 0.006,
+		Width = 1 + i * 0.004,
+		Shells = if i < 20 then 2 else 3,
+	}))
+	table.insert(list, L("Charge")({ Fill = 0.8 - i * 0.0025, Outline = 0.25 - i * 0.0015 }))
+	-- Sparks rising through the flames.
+	if i >= 8 then
+		table.insert(list, Motes({ Count = 6 + math.floor(i * 0.14), Flicker = true, Speed = 0.6, Swirl = 0.9, Size = 0.16, Height = 6 + i * 0.06, Radius = 2 }))
+	end
+	-- Crystal armour from "1 in 100,000".
+	if i >= 32 then
+		table.insert(list, L("Armor")({ Gauntlets = i >= 47, Back = if i >= 61 then 5 elseif i >= 47 then 3 else 0, Scale = 0.9 + (i - 32) * 0.006 }))
+	end
+	-- A crystal diadem from "1 in 10,000,000".
+	if i >= 47 then
+		table.insert(list, L("Diadem")({ Spikes = if i >= 81 then 7 else 5, Height = 1.4 + (i - 47) * 0.02, Style = if i % 2 == 0 then "Crown" else "Spire" }))
+	end
+	-- Transformation from "1 in 750,000,000": a giant crystal sovereign.
+	if i >= 61 then
+		table.insert(list, L("Colossus")({ Scale = 2.4 + (i - 61) * 0.045, Variant = COLOSSUS_VARIANT[i % 3 + 1] }))
+	end
+
+	for _, spec in signature do
+		table.insert(list, spec)
+	end
+	cache[gem.Id] = list
+	return list
+end
+
+-- The signature layers only.
 function Recipes.Get(gemId: string): { { [string]: any } }?
 	return R[gemId]
 end
