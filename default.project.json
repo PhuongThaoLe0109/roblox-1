@@ -18,6 +18,9 @@
       "$ignoreUnknownInstances": true
     },
     "StarterPlayer": {
+      "$properties": {
+        "EnableMouseLockOption": false
+      },
       "StarterPlayerScripts": {
         "$path": "src/client",
         "$ignoreUnknownInstances": true

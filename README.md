@@ -60,8 +60,8 @@ and portal parts tagged `Portal` (attributes `PortalKind`, `TargetId`, `TargetNa
 | Double jump / float | Space in air, hold to glide | A | Jump |
 | World map | M | Y | Map button |
 
-Sprint uses Left Shift, which is also Roblox's default shift-lock key. Turn off
-`StarterPlayer.EnableMouseLockOption` if the two clash.
+Sprint uses Left Shift, so Roblox's shift-lock is disabled
+(`StarterPlayer.EnableMouseLockOption = false`, set in `default.project.json`).
 
 ## Replication contract
 
