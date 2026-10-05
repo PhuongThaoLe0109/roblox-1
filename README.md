@@ -44,7 +44,15 @@ src/
       Remotes        ReplicatedStorage.Remotes
   serverstorage/   -> ServerStorage (MapBuilder arrives in a later PR)
   client/          -> StarterPlayer.StarterPlayerScripts
-    UI/Theme         shared UI look (used by the upcoming lobby UI)
+    Main.client      entry point (ScreenGui + responsive UIScale)
+    ClientData       local mirror of inventory / equipped gem / rolls
+    UI/
+      Theme          palette, typography (Merriweather / Michroma / Nunito), shimmer gradients, widgets
+      GemArt         gems drawn from UI frames + gradients, no image assets
+      LobbyHud       title, stats, ROLL + cooldown, Auto / Fast, Inventory, PLAY
+      RollReveal     spinning reel + reveal (rays, flash, gradient lettering, NEW!/×count)
+      Inventory      100-gem collection grid, filters, detail pane, equip
+      Announcements  server cards, rainbow banner for the rarest pulls, toasts
 tests/RollSimulation.luau
 tools/roll-sim.sh
 ```
@@ -60,6 +68,15 @@ tools/roll-sim.sh
 | `Announce` | server → all | `(kind, playerName, gemId)` with kind `"Server"` or `"Banner"` |
 
 Player attributes: `DataLoaded`, `EquippedGem`, `TotalRolls`.
+
+## Lobby controls
+
+| Action | Keyboard | Gamepad |
+|---|---|---|
+| Roll | R / ROLL button | X |
+| Inventory | I | Y |
+
+Auto roll keeps rolling and pauses itself after a "1 in 100,000" or rarer result. Fast skips the reel.
 
 ## Studio testing
 
