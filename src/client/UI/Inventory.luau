@@ -151,6 +151,8 @@ function Inventory.Init(screen: ScreenGui, context)
 	local selectedId: string? = nil
 	local cells: { [string]: { Frame: Frame, Count: TextLabel, Stroke: UIStroke } } = {}
 
+	local open = false
+
 	local function refreshDetail()
 		for _, child in detailIconHolder:GetChildren() do
 			child:Destroy()
@@ -161,9 +163,12 @@ function Inventory.Init(screen: ScreenGui, context)
 			detailOdds.Text = ""
 			detailCount.Text = ""
 			equipButton.Visible = false
+			context.PreviewAura(nil)
 			return
 		end
 		local owned = ClientData.Count(gem.Id)
+		-- Try the aura on while the collection is open.
+		context.PreviewAura(if open and owned > 0 then gem.Id else nil)
 		GemArt.Icon(gem, 200, owned > 0).Parent = detailIconHolder
 		detailName.Text = if owned > 0 then gem.Name else "???"
 		detailGradient.Color = if GemArt.Tier(gem) >= 4 then GemArt.Rainbow else GemArt.Gradient(gem)
@@ -297,7 +302,6 @@ function Inventory.Init(screen: ScreenGui, context)
 		end
 	end)
 
-	local open = false
 	local function setOpen(value: boolean?)
 		if value == nil then
 			value = not open
@@ -309,6 +313,7 @@ function Inventory.Init(screen: ScreenGui, context)
 			panelScale.Scale = 0.85
 			Theme.tween(panelScale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
 		else
+			context.PreviewAura(nil)
 			Theme.tween(panelScale, 0.15, { Scale = 0.9 })
 			task.delay(0.15, function()
 				if not open then
