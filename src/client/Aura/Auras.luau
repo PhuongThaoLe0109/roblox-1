@@ -22,7 +22,7 @@ local localPlayer = Players.LocalPlayer
 
 local Auras = {}
 
-local CULL_DISTANCE = 260
+local CULL_DISTANCE = 300
 
 type Aura = {
 	GemId: string,
@@ -45,6 +45,11 @@ local function place(p: BasePart, cf: CFrame)
 	moveFrames[n] = cf
 end
 
+local function cameraPosition(): Vector3
+	local camera = Workspace.CurrentCamera
+	return if camera then camera.CFrame.Position else Vector3.zero
+end
+
 local function tierOf(odds: number): number
 	if odds < 1_000 then
 		return 1
@@ -59,9 +64,9 @@ local function tierOf(odds: number): number
 end
 
 -- Builds an aura model for a gem around `root`. Returns nil for unknown gems.
-function Auras.Build(gemId: string, root: BasePart, parent: Instance, groundOffset: number?): Aura?
+function Auras.Build(gemId: string, root: BasePart, parent: Instance, groundOffset: number?, character: Model?): Aura?
 	local gem = GemCatalog.Get(gemId)
-	local recipe = Recipes.Get(gemId)
+	local recipe = gem and Recipes.Build(gem)
 	if not gem or not recipe then
 		return nil
 	end
@@ -75,6 +80,8 @@ function Auras.Build(gemId: string, root: BasePart, parent: Instance, groundOffs
 		Ground = -(groundOffset or 3),
 		Place = place,
 		Rng = Random.new(gem.Index * 7919 + 17),
+		Character = character,
+		Eye = if character and character == localPlayer.Character then cameraPosition else nil,
 	}
 	local tier = tierOf(gem.Odds)
 	local updates: { Layers.Update } = {
@@ -133,7 +140,7 @@ local function refresh(player: Player)
 		return
 	end
 	clear(player)
-	local aura = Auras.Build(gemId, root, folder, groundOffset(character, root))
+	local aura = Auras.Build(gemId, root, folder, groundOffset(character, root), character)
 	if aura then
 		auras[player] = aura
 	end

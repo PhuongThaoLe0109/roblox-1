@@ -27,14 +27,30 @@ local seen = {}
 for id in Recipes.All do
 	assert(GemCatalog.Get(id), "recipe for unknown gem " .. id)
 end
-local budget = { 20, 40, 70, 110, 200 }
+local budget = { 30, 50, 100, 150, 240 }
+-- A stand-in R15 character for the limb-following layers.
+local function dummy(root)
+	local character = Instance.new("Model")
+	for name, offset in {
+		UpperTorso = Vector3.new(0, 0.6, 0), Head = Vector3.new(0, 2.1, 0),
+		LeftUpperArm = Vector3.new(-1.5, 0.8, 0), RightUpperArm = Vector3.new(1.5, 0.8, 0),
+		LeftLowerArm = Vector3.new(-1.5, -0.4, 0), RightLowerArm = Vector3.new(1.5, -0.4, 0),
+	} do
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = Vector3.new(1, 1, 1)
+		p.CFrame = root * CFrame.new(offset.X, offset.Y, offset.Z)
+		p.Parent = character
+	end
+	return character
+end
 local function tierOf(odds)
 	if odds < 1_000 then return 1 elseif odds < 100_000 then return 2 elseif odds < 10_000_000 then return 3 elseif odds < 1_000_000_000 then return 4 end
 	return 5
 end
 local totals = {}
 for _, gem in GemCatalog.List do
-	local recipe = Recipes.Get(gem.Id)
+	local recipe = Recipes.Build(gem)
 	if not recipe then
 		print("MISSING recipe: " .. gem.Id)
 		failures += 1
@@ -43,11 +59,13 @@ for _, gem in GemCatalog.List do
 	local signature = {}
 	for _, spec in recipe do table.insert(signature, spec.Kind) end
 	local model = Instance.new("Model")
+	local root = CFrame.new(10, 70, -5) * CFrame.Angles(0, 0.7, 0)
 	local placed = 0
 	local ctx = {
 		Parent = model, Color = gem.Color, Accent = gem.Accent, Seed = gem.Index, Ground = -3,
 		Place = function(p, cf) p.CFrame = cf; placed += 1 end,
 		Rng = Random.new(gem.Index * 7919 + 17),
+		Character = dummy(root),
 	}
 	local updates = { Layers.Glow(ctx, { Range = 9, Brightness = 1 }) }
 	for _, spec in recipe do
@@ -60,7 +78,6 @@ for _, gem in GemCatalog.List do
 			if ok then table.insert(updates, update) else print(gem.Id .. " " .. spec.Kind .. ": " .. tostring(update)); failures += 1 end
 		end
 	end
-	local root = CFrame.new(10, 70, -5) * CFrame.Angles(0, 0.7, 0)
 	for _, t in { 0, 0.016, 0.5, 1.37, 7.9, 123.4 } do
 		for _, update in updates do
 			local ok, err = pcall(update, t, root)
