@@ -69,7 +69,7 @@ local function buildDummy(index: number, post: Vector3, parent: Instance)
 	task.spawn(function()
 		while model.Parent and humanoid.Health > 0 do
 			task.wait(1)
-			if os.clock() - lastHit > REGEN_DELAY then
+			if os.clock() - lastHit > REGEN_DELAY and not model:GetAttribute(CombatConfig.Status.Puffed) then
 				humanoid.Health = MAX_HEALTH
 				local root = model:FindFirstChild("HumanoidRootPart")
 				if root and (root.Position - post).Magnitude > 12 then

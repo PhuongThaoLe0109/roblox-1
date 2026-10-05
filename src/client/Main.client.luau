@@ -24,6 +24,7 @@ local FactionSelect = require(UI:WaitForChild("FactionSelect"))
 local Toasts = require(UI:WaitForChild("Toasts"))
 local PortalLabels = require(UI:WaitForChild("PortalLabels"))
 local SkillBar = require(UI:WaitForChild("SkillBar"))
+local PuffOverlay = require(UI:WaitForChild("PuffOverlay"))
 
 local screen = Instance.new("ScreenGui")
 screen.Name = "GemHUD"
@@ -73,6 +74,7 @@ for name, module in {
 	FactionSelect = FactionSelect,
 	PortalLabels = PortalLabels,
 	SkillBar = SkillBar,
+	PuffOverlay = PuffOverlay,
 } do
 	task.spawn(function()
 		local ok, err = pcall(module.Init, screen, context)

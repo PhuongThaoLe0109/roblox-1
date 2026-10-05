@@ -29,6 +29,7 @@ src/
         SkillKit         shared skill building blocks (combo melee, shots, dashes, slams)
         Skills/<Id>      one module per weapon: Basic, Q, E, R
         TrainingDummies  hittable training crystals on the hub
+        PuffService      0 HP -> gem capsule; reform, seal, revive, return home
   client/          -> StarterPlayer.StarterPlayerScripts
     Main.client      entry point
     SkyCycle         animates sky colours from the shared server clock
@@ -37,7 +38,7 @@ src/
     WeaponController weapon input, aim, cooldown prediction, dash/roll/leap motion
     VFX              all weapon effects + swing/whip/drone/wing animation
     UI/              Theme, LoadingScreen, Hud, TerritoryBar, MapPanel,
-                     FactionSelect, Toasts, PortalLabels, SkillBar
+                     FactionSelect, Toasts, PortalLabels, SkillBar, PuffOverlay
 ```
 
 ## Baking the map
@@ -80,7 +81,17 @@ Each gem type has its own light-weapon (`GemConfig.GemTypes.<Gem>.WeaponId`):
 
 Balance lives in `WeaponConfig`. Allies can't hurt each other, the hub and homes are PvP-safe,
 and the training crystals on the hub are always hittable for testing.
-Defeat currently uses Roblox's normal death/respawn; the Puff state comes next.
+## Puff state
+
+Combat never kills outright. At 0 HP the body bursts into a puff of light and
+the gem floats in a crystal capsule (`CombatConfig.Puff` holds the tuning):
+
+- After 8 s the gem **reforms** on the spot at full health with 2.5 s of protection.
+- An **enemy** can hold **G** on the capsule to **seal** it: the gem is sent home and the sealer earns essence.
+- An **ally** can hold **H** to **revive** it immediately.
+- The puffed player can press **Return Home** to respawn at their base.
+
+Training crystals puff and reform too. Falling into the void still respawns normally.
 
 ## Controls
 

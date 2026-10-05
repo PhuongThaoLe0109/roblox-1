@@ -21,11 +21,28 @@ CombatConfig.Status = {
 	EchoUntil = "EchoUntil", -- Prism Spear R
 	HeatUntil = "HeatUntil", -- Ember Gauntlet E
 	WeaponSummoned = "WeaponSummoned",
-	Puffed = "Puffed", -- reserved for the Puff state system
+	Puffed = "Puffed", -- body gone, gem in a capsule (PuffService)
+	PuffedUntil = "PuffedUntil", -- when the gem reforms on its own
+	PuffAction = "PuffAction", -- "" | "Sealing" | "Reviving" while a prompt is held
+	ProtectedUntil = "ProtectedUntil", -- spawn protection after reforming
 }
 
 CombatConfig.Tags = {
 	Dummy = "CombatDummy", -- training dummies: always hittable, even in safe zones
+	PuffPrompt = "PuffPrompt", -- Seal / Revive prompts on gem capsules
+}
+
+-- Puff state: what happens at 0 HP instead of dying.
+CombatConfig.Puff = {
+	Duration = 8, -- seconds before the gem reforms on the spot
+	DummyDuration = 4,
+	ReformHealth = 1, -- fraction of max health after reforming
+	ProtectTime = 2.5, -- invulnerability after reforming
+	SealHoldTime = 1.5, -- enemies hold to seal (send home)
+	ReviveHoldTime = 1.5, -- allies hold to revive on the spot
+	PromptDistance = 10,
+	SealReward = 40, -- essence for sealing an enemy gem
+	SealRespawnDelay = 1.2,
 }
 
 -- Damage = base * powerScale * buffs * defenseScale
@@ -43,6 +60,7 @@ CombatConfig.MaxAimDistance = 400 -- server rejects aim points further than this
 table.freeze(CombatConfig.Status)
 table.freeze(CombatConfig.Tags)
 table.freeze(CombatConfig.SafeZones)
+table.freeze(CombatConfig.Puff)
 table.freeze(CombatConfig)
 
 return CombatConfig

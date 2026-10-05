@@ -14,6 +14,7 @@ local TerritoryService = require(Modules:WaitForChild("TerritoryService"))
 local Combat = Modules:WaitForChild("Combat")
 local WeaponService = require(Combat:WaitForChild("WeaponService"))
 local TrainingDummies = require(Combat:WaitForChild("TrainingDummies"))
+local PuffService = require(Combat:WaitForChild("PuffService"))
 
 -- The map is normally baked in Edit mode (see ServerStorage.MapBuilder).
 -- Only build it here as a fallback when the place has no Workspace.Map.
@@ -59,5 +60,6 @@ FactionTeams.Init()
 PortalService.Init(map)
 TerritoryService.Init(map)
 WeaponService.Init()
+PuffService.Init()
 TrainingDummies.Init(map)
 GemDataManager.Init()

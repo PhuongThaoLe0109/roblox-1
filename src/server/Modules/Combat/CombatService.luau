@@ -35,6 +35,9 @@ local CombatService = {}
 CombatService.Damaged = Signal.new() -- (attackerPlayer?, target, amount)
 CombatService.Defeated = Signal.new() -- (attackerPlayer?, target)
 
+-- Set by PuffService: called instead of letting combat damage reach 0 HP.
+CombatService.LethalHandler = nil :: ((target: any, attacker: any) -> ())?
+
 export type Attacker = {
 	Player: Player?,
 	Character: Model,
@@ -133,6 +136,9 @@ function CombatService.CanHit(attacker: Attacker, target: Target): boolean
 		return false
 	end
 	if target.Model:GetAttribute(STATUS.Puffed) then
+		return false
+	end
+	if CombatService.IsActive(target.Model, STATUS.ProtectedUntil) then
 		return false
 	end
 	if target.IsDummy then
@@ -390,7 +396,13 @@ function CombatService.Damage(attacker: Attacker, target: Target, base: number, 
 
 	local humanoid = target.Humanoid
 	local before = humanoid.Health
-	humanoid.Health = math.max(0, before - dealt)
+	local lethal = before - dealt <= 0
+	if lethal and CombatService.LethalHandler then
+		-- Never let combat kill outright: the gem retreats into a capsule.
+		humanoid.Health = 1
+	else
+		humanoid.Health = math.max(0, before - dealt)
+	end
 	if attacker.Player then
 		model:SetAttribute("LastAttackerId", attacker.Player.UserId)
 	end
@@ -425,12 +437,11 @@ function CombatService.Damage(attacker: Attacker, target: Target, base: number, 
 	end
 
 	CombatService.Damaged:Fire(attacker.Player, target, dealt)
-	if before > 0 and humanoid.Health <= 0 then
-		if attacker.Player and target.Player then
-			GemDataManager.IncrementStat(attacker.Player, "PuffsInflicted")
-			GemDataManager.IncrementStat(target.Player, "TimesPuffed")
-		end
+	if before > 0 and lethal then
 		CombatService.Defeated:Fire(attacker.Player, target)
+		if CombatService.LethalHandler then
+			CombatService.LethalHandler(target, attacker)
+		end
 	end
 	return dealt
 end

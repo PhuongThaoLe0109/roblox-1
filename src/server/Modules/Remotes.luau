@@ -9,6 +9,7 @@
 --   WeaponAction         (RemoteEvent)     client -> server (action, aimDir, aimPoint)
 --   WeaponState          (RemoteEvent)     server -> client (event, slot, value)
 --   WeaponFX             (RemoteEvent)     server -> clients (kind, params)
+--   PuffAction           (RemoteEvent)     client -> server ("ReturnHome")
 --
 -- Notify kinds the client understands: "Info", "Success", "Warning",
 -- "Capture", "RankUp", "Travel".
@@ -42,6 +43,7 @@ Remotes.Notify = remoteEvent("Notify")
 Remotes.WeaponAction = remoteEvent("WeaponAction")
 Remotes.WeaponState = remoteEvent("WeaponState")
 Remotes.WeaponFX = remoteEvent("WeaponFX")
+Remotes.PuffAction = remoteEvent("PuffAction")
 
 folder.Parent = ReplicatedStorage
 

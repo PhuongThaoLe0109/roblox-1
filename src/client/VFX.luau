@@ -593,6 +593,82 @@ Effects.Damage = function(p)
 	Debris:AddItem(billboard, 0.85)
 end
 
+-- Puff: the body bursts into a cloud of pastel smoke and light.
+Effects.Puff = function(p)
+	local position = p.Position
+	for i = 1, 9 do
+		local offset = Vector3.new(math.random(-20, 20) / 10, math.random(-10, 25) / 10, math.random(-20, 20) / 10)
+		local cloud = fxPart({
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one * 1.5,
+			CFrame = CFrame.new(position + offset),
+			Color = if i % 3 == 0 then p.Color else Color3.fromRGB(255, 225, 245),
+			Material = if i % 2 == 0 then Enum.Material.ForceField else Enum.Material.SmoothPlastic,
+			Transparency = 0.15,
+		})
+		local size = math.random(45, 75) / 10
+		tween(cloud, 0.25, { Size = Vector3.one * size }, Enum.EasingStyle.Back)
+		task.delay(0.35 + i * 0.03, function()
+			tween(cloud, 0.6, { Size = Vector3.one * size * 1.4, Transparency = 1, CFrame = cloud.CFrame + Vector3.new(0, 2.5, 0) })
+		end)
+		Debris:AddItem(cloud, 1.2)
+	end
+	sparkleBurst(position, p.Color, 45, 18)
+	Effects.Burst({ Position = position, Radius = 6, Color = p.Color, Duration = 0.5 })
+end
+
+-- Reform: a column of light rises and the body fades back in.
+Effects.Reform = function(p)
+	local position = p.Position
+	local column = fxPart({
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.5, 6, 6),
+		CFrame = CFrame.new(position + Vector3.new(0, 0.25, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = p.Color,
+		Material = Enum.Material.ForceField,
+	})
+	tween(column, 0.6, { Size = Vector3.new(24, 6, 6), CFrame = CFrame.new(position + Vector3.new(0, 12, 0)) * CFrame.Angles(0, 0, math.rad(90)), Transparency = 1 })
+	Debris:AddItem(column, 0.65)
+	sparkleBurst(position, p.Color, 40, 14)
+	Effects.Ring({ Position = position - Vector3.new(0, 2.5, 0), Radius = 9, Color = p.Color })
+
+	local model = p.Target
+	if model and model:IsA("Model") then
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" and d.Transparency < 1 then
+				local target = d.Transparency
+				d.Transparency = 1
+				tween(d, 0.5, { Transparency = target }, Enum.EasingStyle.Sine)
+			end
+		end
+	end
+end
+
+-- Seal: a bubble closes around the gem and floats away home.
+Effects.Seal = function(p)
+	local bubble = fxPart({
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.one * 8,
+		CFrame = CFrame.new(p.Position),
+		Color = Color3.fromRGB(255, 200, 240),
+		Material = Enum.Material.ForceField,
+	})
+	local gem = fxPart({
+		Size = Vector3.new(1.8, 1.8, 1.1),
+		CFrame = CFrame.new(p.Position) * CFrame.Angles(0, 0, math.rad(45)),
+		Color = p.Color,
+	})
+	tween(bubble, 0.35, { Size = Vector3.one * 3.2 }, Enum.EasingStyle.Back)
+	task.delay(0.4, function()
+		local up = Vector3.new(0, 30, 0)
+		tween(bubble, 1, { CFrame = bubble.CFrame + up, Transparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
+		tween(gem, 1, { CFrame = gem.CFrame + up, Transparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
+		sparkleBurst(p.Position, Color3.fromRGB(255, 200, 240), 20, 8)
+	end)
+	Debris:AddItem(bubble, 1.5)
+	Debris:AddItem(gem, 1.5)
+end
+
 --------------------------------------------------------------------------------
 -- Weapon animation
 --------------------------------------------------------------------------------
