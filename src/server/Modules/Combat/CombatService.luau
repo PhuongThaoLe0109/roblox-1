@@ -193,6 +193,8 @@ function CombatService.Knockback(target: Target, velocity: Vector3, duration: nu
 	force.Parent = target.Root
 	Debris:AddItem(force, duration or 0.22)
 	Debris:AddItem(attachment, duration or 0.22)
+	-- The flight continues after the force ends; let MovementGuard know.
+	CombatService.Extend(target.Character, STATUS.MoveGraceUntil, (duration or 0.22) + 1.2)
 end
 
 --------------------------------------------------------------------------------
@@ -346,7 +348,7 @@ function CombatService.Projectile(attacker: Player, origin: Vector3, direction: 
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = exclude
 
-	CombatService.FX("Projectile", { Id = id, Origin = origin, Direction = dir, Speed = speed, Range = range, Color = color, Accent = accent })
+	CombatService.FX("Projectile", { Id = id, Time = now(), Origin = origin, Direction = dir, Speed = speed, Range = range, Color = color, Accent = accent })
 
 	local connection
 	connection = RunService.Heartbeat:Connect(function(dt)

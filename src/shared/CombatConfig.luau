@@ -18,6 +18,10 @@ CombatConfig.ComboWindow = 1.6 -- hits within this window keep the combo counter
 CombatConfig.AssistWindow = 8 -- damage within this window before a kill earns nothing extra (reserved)
 CombatConfig.LatencyTolerance = 0.12 -- accept presses slightly before a cooldown ends
 CombatConfig.MaxAimDistance = 400
+CombatConfig.KillHeal = 25 -- health restored to the killer
+CombatConfig.KillCreditWindow = 12 -- falling off after a hit still credits the attacker
+CombatConfig.StreakMilestones = { 3, 5, 8, 12, 20 } -- announced to the server
+CombatConfig.MovingAttackSpeed = 12 -- walk speed while an attack plays out
 
 --------------------------------------------------------------------------------
 -- M1: four-hit crystal blade combo
@@ -55,6 +59,7 @@ CombatConfig.Skills = {
 		Key = "Z",
 		Icon = "⋔",
 		Cooldown = 6,
+		Busy = 0.3,
 		Damage = 8,
 		Count = 3,
 		Spread = 11,
@@ -68,6 +73,7 @@ CombatConfig.Skills = {
 		Key = "X",
 		Icon = "⤒",
 		Cooldown = 8,
+		Busy = 0.4,
 		Damage = 12,
 		Range = 10,
 		Arc = 120,
@@ -80,6 +86,7 @@ CombatConfig.Skills = {
 		Key = "C",
 		Icon = "➶",
 		Cooldown = 9,
+		Busy = 0.36,
 		Damage = 14,
 		HitRadius = 7,
 		Speed = 120,
@@ -92,6 +99,7 @@ CombatConfig.Skills = {
 		Key = "V",
 		Icon = "✷",
 		Cooldown = 22,
+		Busy = 0.8, -- wind-up plus recovery
 		Damage = 28,
 		Radius = 19,
 		WindUp = 0.55,
@@ -136,6 +144,8 @@ CombatConfig.Status = {
 	Guard = "Guard",
 	BusyUntil = "BusyUntil", -- end lag / wind-ups: no new actions
 	Combo = "Combo", -- current combo count (on the attacker)
+	SpawnProtected = "SpawnProtected", -- cleared as soon as you attack
+	MoveGraceUntil = "MoveGraceUntil", -- dashes and knockback: MovementGuard looks away
 }
 
 -- Player attributes
@@ -144,6 +154,7 @@ CombatConfig.PlayerAttributes = {
 	Streak = "Streak",
 }
 
+table.freeze(CombatConfig.StreakMilestones)
 table.freeze(CombatConfig.M1.Damage)
 table.freeze(CombatConfig.M1)
 for _, skill in CombatConfig.Skills do

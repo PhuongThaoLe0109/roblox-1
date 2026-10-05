@@ -15,14 +15,14 @@ end
 local Modules = script.Parent:WaitForChild("Modules")
 local PlayerData = require(Modules:WaitForChild("PlayerData"))
 local RollService = require(Modules:WaitForChild("RollService"))
-local Remotes = require(Modules:WaitForChild("Remotes"))
+local Combat = Modules:WaitForChild("Combat")
+local ActionService = require(Combat:WaitForChild("ActionService"))
+local MatchService = require(Combat:WaitForChild("MatchService"))
+local MovementGuard = require(Combat:WaitForChild("MovementGuard"))
 
 RollService.Init()
-
--- Placeholder until the arena/combat system lands: the Play button works but
--- the arena isn't open yet.
-Remotes.RequestPlay.OnServerInvoke = function()
-	return false, "ArenaClosed"
-end
+ActionService.Init()
+MovementGuard.Init()
+MatchService.Init()
 
 PlayerData.Init()
