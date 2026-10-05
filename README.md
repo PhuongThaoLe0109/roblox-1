@@ -29,20 +29,28 @@ src/
                      FactionSelect, Toasts, PortalLabels
 ```
 
-## Baking the map
+## The map
 
-Run once in **Edit mode** from the Studio command bar, then save the place:
+`Workspace.Map` is **hand-built in Studio** and saved in the place file. It is the source of truth:
 
-```lua
-require(game.ServerStorage.MapBuilder).Build()                    -- build if missing
-require(game.ServerStorage.MapBuilder).Build({ Rebuild = true })  -- regenerate
-```
+- Code must never regenerate, delete or modify `Workspace.Map`. Rojo does not sync `Workspace`
+  (`default.project.json` only maps ReplicatedStorage, ServerScriptService, ServerStorage and StarterPlayer).
+- Anything that has to appear on the map at runtime (NPCs, monsters, chests, forges, dummies…) is spawned
+  by code under its own folder, or found by name / CollectionService tag. Never written into `Workspace.Map`.
+- Ground is low-poly `Part`/`WedgePart` geometry (`Map.Hub.Island.Ground`); Terrain is only the sea.
+  To find the ground, raycast down onto parts. Don't rely on Terrain materials.
+- Visual style: low-poly, flat `SmoothPlastic` colours, purple-pink sunset palette. New effects and
+  weapons should match it.
 
-It creates `Workspace.Map`, fills the terrain sea and adds clouds/atmosphere/bloom.
-At game start the server only builds the map when `Workspace.Map` is missing.
-You can hand-edit or replace the baked map as long as these names stay:
-`Territories/<Id>/{CapturePoint, Arrival}`, `Hub/Arrival`, `Homes/<Faction>/Arrival`,
-and portal parts tagged `Portal` (attributes `PortalKind`, `TargetId`, `TargetName`, `RequiredRank`).
+Layout (`TerritoryConfig`): the hub is a ~640-stud starter island around the origin (`HubRadius = 680`);
+the 12 islands sit on a ring at `RingRadius = 6000` and the faction homes at `HomeRadius = 7200`, reachable only by portal.
+
+Names code relies on: `Hub/Arrival`, `Territories/<Id>/{CapturePoint, Arrival}`, `Homes/<Faction>/Arrival`,
+the hub `RogueSpawn` / faction spawns, and portal parts tagged `Portal` (attributes `PortalKind`,
+`TargetId`, `TargetName`, `RequiredRank`).
+
+`ServerStorage.MapBuilder` is a **fallback only**: at game start it builds a greybox world when
+`Workspace.Map` is missing (e.g. an empty test place) and otherwise returns the existing map untouched.
 
 ## World & progression
 

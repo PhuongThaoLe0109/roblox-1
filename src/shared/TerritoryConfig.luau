@@ -40,13 +40,16 @@ export type TerritoryInfo = {
 -- Layout
 --------------------------------------------------------------------------------
 
-TerritoryConfig.HubRadius = 110
+-- The baked map (Workspace.Map) is hand-built in Studio and is the source of
+-- truth; these numbers must match it. The hub is a ~640-stud starter island
+-- around the origin; the other islands are far apart and reached by portal.
+TerritoryConfig.HubRadius = 680
 TerritoryConfig.IslandRadius = 150
-TerritoryConfig.RingRadius = 1000 -- ~215 studs of open sea between neighbours
+TerritoryConfig.RingRadius = 6000
 TerritoryConfig.HomeIslandRadius = 80
-TerritoryConfig.HomeRadius = 1450
-TerritoryConfig.SeaLevel = -6 -- water surface; island ground tops sit at Y = 0
-TerritoryConfig.WorldExtent = 1800 -- terrain water is filled to +/- this
+TerritoryConfig.HomeRadius = 7200
+TerritoryConfig.SeaLevel = -6 -- MapBuilder fallback only: water surface
+TerritoryConfig.WorldExtent = 7600 -- MapBuilder fallback only: terrain water is filled to +/- this
 
 -- Portals sit on the island's hub-facing axis: return portal at the front,
 -- forward portal at the back. Values are fractions of the island radius.

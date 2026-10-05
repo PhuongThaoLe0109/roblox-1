@@ -1,14 +1,13 @@
 -- MapBuilder (ServerStorage)
--- Procedurally builds the world from TerritoryConfig. Intended to be run ONCE
--- in Edit mode to bake the map into the place file:
+-- FALLBACK ONLY. The real map is hand-built in Studio and saved in the place
+-- file; it must never be regenerated, deleted or modified by code.
 --
---   Studio command bar:
+-- Build() generates a greybox world from TerritoryConfig only when
+-- Workspace.Map does not exist (e.g. an empty test place). If Workspace.Map
+-- exists it is returned untouched, always.
+--
+--   Studio command bar (empty place only):
 --     require(game.ServerStorage.MapBuilder).Build()
---   To throw away the current map and regenerate:
---     require(game.ServerStorage.MapBuilder).Build({ Rebuild = true })
---
--- At game start the server only calls Build() as a fallback when Workspace.Map
--- is missing (e.g. an unbaked test place); an existing map is never touched.
 --
 -- Creates:
 --   Workspace.Map
@@ -1011,7 +1010,6 @@ end
 --------------------------------------------------------------------------------
 
 export type BuildOptions = {
-	Rebuild: boolean?, -- destroy an existing Workspace.Map and build fresh
 	SkipSea: boolean?, -- leave Terrain untouched
 }
 
@@ -1022,22 +1020,17 @@ local function setWaypoint(name: string)
 	end)
 end
 
--- Builds Workspace.Map (and sea, clouds, lighting effects) and returns it.
--- If Workspace.Map already exists it is returned untouched unless
--- options.Rebuild is set. Safe to call from the Edit-mode command bar.
+-- Builds Workspace.Map (and sea, clouds, lighting effects) only when it does
+-- not exist yet, and returns it. An existing Workspace.Map is never modified.
 function MapBuilder.Build(options: BuildOptions?): Instance
 	local opts = options or {}
 	local existing = Workspace:FindFirstChild("Map")
-	if existing and not opts.Rebuild then
+	if existing then
 		return existing
 	end
 
 	setWaypoint("Before MapBuilder.Build")
 	local started = os.clock()
-
-	if existing then
-		existing:Destroy()
-	end
 
 	applyEnvironment()
 	if not opts.SkipSea then
