@@ -8,6 +8,10 @@
 --   RequestPlay    RemoteFunction  client -> server  () -> (ok, reason?)   enter the arena
 --   InventorySync  RemoteEvent     server -> client  ("Full", snapshot) | ("Gem", id, count) | ("Equipped", id)
 --   Announce       RemoteEvent     server -> all     (kind, playerName, gemId)  kind = "Server" | "Banner"
+--   CombatAction   RemoteEvent     client -> server  (action, aimDirection: Vector3)
+--   CombatState    RemoteEvent     server -> client  ("Cooldown", slot, readyAt) | ("Rejected", slot, reason)
+--   CombatFX       RemoteEvent     server -> all     (kind, params)
+--   KillFeed       RemoteEvent     server -> all     (killerName?, victimName, streak)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -30,6 +34,10 @@ Remotes.GetProfile = create("RemoteFunction", "GetProfile") :: RemoteFunction
 Remotes.RequestPlay = create("RemoteFunction", "RequestPlay") :: RemoteFunction
 Remotes.InventorySync = create("RemoteEvent", "InventorySync") :: RemoteEvent
 Remotes.Announce = create("RemoteEvent", "Announce") :: RemoteEvent
+Remotes.CombatAction = create("RemoteEvent", "CombatAction") :: RemoteEvent
+Remotes.CombatState = create("RemoteEvent", "CombatState") :: RemoteEvent
+Remotes.CombatFX = create("RemoteEvent", "CombatFX") :: RemoteEvent
+Remotes.KillFeed = create("RemoteEvent", "KillFeed") :: RemoteEvent
 
 folder.Parent = ReplicatedStorage
 
