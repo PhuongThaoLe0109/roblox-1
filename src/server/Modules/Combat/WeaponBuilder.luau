@@ -10,6 +10,9 @@
 
 local WeaponBuilder = {}
 
+-- Weapons are built at this size: big, readable crystal arms.
+WeaponBuilder.Scale = 1.45
+
 local WHITE = Color3.new(1, 1, 1)
 local GRIP_DARK = Color3.fromRGB(70, 50, 90)
 
@@ -120,9 +123,12 @@ local function guard(model: Model, handle: BasePart, z: number, width: number, c
 	end
 end
 
-local function newHandle(model: Model, handPart: BasePart, length: number, grip: CFrame?, name: string?): Part
+-- The handle runs along -Z toward the business end. `tilt` (degrees) angles
+-- it down the line of the arm, so blades extend forward-and-out from the
+-- fist and slashes follow the arm's arc.
+local function newHandle(model: Model, handPart: BasePart, length: number, grip: CFrame?, name: string?, tilt: number?): Part
 	local handle = part(model, name or "Handle", Vector3.new(0.32, 0.32, length), GRIP_DARK, Enum.Material.SmoothPlastic)
-	weld(handPart, handle, gripOffset(handPart) * (grip or CFrame.identity), "Grip")
+	weld(handPart, handle, gripOffset(handPart) * CFrame.Angles(math.rad(tilt or -50), 0, 0) * (grip or CFrame.identity), "Grip")
 	return handle
 end
 
@@ -192,7 +198,8 @@ function Builders.Spear(model, character, color, accent)
 	if not right then
 		return
 	end
-	local handle = newHandle(model, right, 8, CFrame.new(0, 0, -1.4))
+	-- Held upright and tilted forward at rest; CombatAnim levels it to thrust.
+	local handle = newHandle(model, right, 8, CFrame.new(0, 0, -1.4), nil, 40)
 	for _, z in { -2.5, 0, 2.5 } do
 		local ring = part(model, "Band", Vector3.new(0.45, 0.45, 0.25), accent, Enum.Material.Neon)
 		weld(handle, ring, CFrame.new(0, 0, z))
@@ -208,7 +215,7 @@ function Builders.Scythe(model, character, color, accent)
 	if not right then
 		return
 	end
-	local handle = newHandle(model, right, 6.5, CFrame.new(0, 0, -1.2))
+	local handle = newHandle(model, right, 6.5, CFrame.new(0, 0, -1.2), nil, -62)
 	-- The curved blade: a fan of shards sweeping back from the top.
 	local top = -3.25
 	for i = 0, 5 do
@@ -232,7 +239,7 @@ function Builders.Hammer(model, character, color, accent)
 	if not right then
 		return
 	end
-	local handle = newHandle(model, right, 4.4, CFrame.new(0, 0, -1))
+	local handle = newHandle(model, right, 4.4, CFrame.new(0, 0, -1), nil, -62)
 	local head = part(model, "Head", Vector3.new(2.6, 1.6, 1.6), color, Enum.Material.Glass, 0.15)
 	weld(handle, head, CFrame.new(0, 0, -2.6))
 	local core = part(model, "Core", Vector3.new(2.7, 0.7, 0.7), WHITE, Enum.Material.Neon)
@@ -294,6 +301,23 @@ function WeaponBuilder.Build(character: Model, style: string, color: Color3, acc
 	model.Name = "Weapon"
 	model:SetAttribute("Style", style)
 	builder(model, character, color, accent)
+	-- Scale the whole weapon about the hand: parts, welds (except the grip on
+	-- the hand itself) and the trail attachments.
+	local scale = WeaponBuilder.Scale
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Size *= scale
+		elseif d:IsA("Weld") and d.Name ~= "Grip" then
+			d.C0 = d.C0 - d.C0.Position + d.C0.Position * scale
+		elseif d:IsA("Attachment") then
+			d.Position *= scale
+		end
+	end
+	for _, d in model:GetDescendants() do
+		if d:IsA("Weld") and d.Part0 and d.Part1 then
+			d.Part1.CFrame = d.Part0.CFrame * d.C0
+		end
+	end
 	model.Parent = character
 	return model
 end

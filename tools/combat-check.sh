@@ -20,6 +20,10 @@ OUT="$(mktemp)"
 	echo 'local function fakeScript() return setmetatable({}, { __index = function(_, k) if k == "WaitForChild" then return function(_, name) return { Name = name } end end if k == "Parent" then return fakeScript() end end }) end'
 	echo 'require = function(m) return modules[m.Name] end'
 	echo 'local rsModule = Instance.new("ModuleScript"); rsModule.Name = "CombatConfig"; rsModule.Parent = game:GetService("ReplicatedStorage")'
+	echo "local BeastModels = (function()"
+	cat src/server/Modules/Combat/BeastModels.luau
+	echo "end)()"
+	echo "modules.BeastModels = BeastModels"
 	echo "local BeastService = (function()"
 	echo "local script = fakeScript()"
 	cat src/server/Modules/Combat/BeastService.luau

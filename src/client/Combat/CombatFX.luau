@@ -16,10 +16,42 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Theme = require(script.Parent.Parent:WaitForChild("UI"):WaitForChild("Theme"))
+local CombatAnim = require(script.Parent:WaitForChild("CombatAnim"))
 
 local player = Players.LocalPlayer
 
 local CombatFX = {}
+
+-- Set by BeastFX: plays a beast's maul attack (character, combo).
+CombatFX.OnBeastAttack = nil :: ((Instance, number) -> ())?
+
+-- The body motion that goes with each effect (played on its caster).
+local ANIM_FOR: { [string]: string } = {
+	Cast = "Cast",
+	Launcher = "Launcher",
+	Rush = "Rush",
+	Spin = "Spin",
+	SlamLeap = "SlamLeap",
+	Flurry = "Flurry",
+	NovaCharge = "NovaCharge",
+	Nova = "NovaRelease",
+	Beam = "Beam",
+	Rain = "SkyCall",
+	Meteor = "SkyCall",
+	Bloom = "SkyCall",
+	Vortex = "Push",
+	Chain = "Push",
+	Bind = "Push",
+	Trap = "Ground",
+	Frostbite = "Ground",
+	Curse = "Ground",
+	Pillars = "Ground",
+	Grab = "Grab",
+	Blink = "Blink",
+	Shield = "Guard",
+	Domain = "Domain",
+	Transform = "Transform",
+}
 
 local WHITE = Color3.new(1, 1, 1)
 
@@ -365,6 +397,61 @@ local function spikes(center: Vector3, count: number, radius: number, height: nu
 	end)
 end
 
+-- The shared "detonation" layer for big AoE hits: a white-hot core, a glass
+-- shockwave dome that races out to the edge of the hit area, a scorched ground
+-- disc, rising embers and a ground crack ring. `power` (0..1+) scales it all.
+local function explosion(center: Vector3, radius: number, color: Color3, accent: Color3, power: number?)
+	local k = power or 1
+	local ground = groundBelow(center + Vector3.new(0, 2, 0)) or (center - Vector3.new(0, 3, 0))
+
+	-- Core: a blinding white ball that pops then sinks into the colour.
+	flash(center, WHITE, 1.5, radius * 0.55 * k, 0.16, 0.05)
+	flash(center, accent, 2, radius * 0.9, 0.3, 0.3)
+
+	-- Shockwave dome: a hollow glass sphere sweeping to the edge of the area.
+	local dome = part(Vector3.one, CFrame.new(ground), color, Enum.Material.Glass, 0.4)
+	dome.Shape = Enum.PartType.Ball
+	run(0.42, function(alpha)
+		local d = radius * 2.1 * easeOut(alpha)
+		dome.Size = Vector3.new(d, d * 0.55, d)
+		dome.CFrame = CFrame.new(ground)
+		dome.Transparency = 0.4 + 0.6 * alpha ^ 0.8
+	end, function()
+		dome:Destroy()
+	end)
+
+	-- Two shock rings on the floor: a fast thin one and a slow heavy one.
+	local floor = CFrame.new(ground + Vector3.new(0, 0.25, 0))
+	ring(floor, radius * 0.2, radius * 1.15, 1.2 * k, 0.15, WHITE, accent, 0.3, 44, 0)
+	task.delay(0.05, function()
+		ring(floor * CFrame.new(0, 0.1, 0), radius * 0.1, radius, 3.2 * k, 0.5, color, accent, 0.65, 44)
+	end)
+
+	-- Scorch: a dark glossy disc that lingers and fades, so the hit leaves a mark.
+	local scorch = part(Vector3.new(0.15, 1, 1), CFrame.new(ground + Vector3.new(0, 0.08, 0)) * CFrame.Angles(0, 0, math.rad(90)), lerp(color, Color3.new(0.05, 0.03, 0.08), 0.7), Enum.Material.Glass, 0.25)
+	scorch.Shape = Enum.PartType.Cylinder
+	run(1.6, function(alpha)
+		local d = radius * 1.5 * easeOut(math.min(1, alpha * 6))
+		scorch.Size = Vector3.new(0.15, d, d)
+		scorch.Transparency = 0.25 + 0.75 * math.max(0, alpha - 0.4) / 0.6
+	end, function()
+		scorch:Destroy()
+	end)
+
+	-- Embers rising from the whole area, then a ring of sparks along the edge.
+	for i = 1, math.floor(10 * k + 0.5) do
+		local a = math.random() * math.pi * 2
+		local r = math.sqrt(math.random()) * radius
+		local p = ground + Vector3.new(math.cos(a) * r, 0.5, math.sin(a) * r)
+		task.delay(math.random() * 0.15, function()
+			burst(p, color, accent, 2, 26, 0.8, 0.55, Vector3.new(0, 2.2, 0))
+		end)
+	end
+	burst(center, color, accent, math.floor(14 * k + 0.5), 55, 1.2, 0.5, Vector3.new(0, 0.35, 0))
+	light(center + Vector3.new(0, 4, 0), WHITE, radius * 2.4, 9 * k, 0.25)
+	light(center, color, radius * 3, 6 * k, 0.8)
+end
+
 -- Short trail on a character's root.
 local function rootTrail(character: Model, color: Color3, accent: Color3, duration: number, height: number?)
 	local root = character:FindFirstChild("HumanoidRootPart")
@@ -528,48 +615,13 @@ local function startShake()
 end
 
 --------------------------------------------------------------------------------
--- Arm & blade motion (Motor6D C0 only, so it layers over the idle animation)
+-- Weapon trails
 --------------------------------------------------------------------------------
 
-local baseC0: { [Motor6D]: CFrame } = setmetatable({}, { __mode = "k" }) :: any
-local motionToken: { [Motor6D]: number } = setmetatable({}, { __mode = "k" }) :: any
 
-local function shoulder(character: Model): Motor6D?
-	local arm = character:FindFirstChild("RightUpperArm")
-	local motor = arm and arm:FindFirstChild("RightShoulder")
-	return if motor and motor:IsA("Motor6D") then motor else nil
-end
 
 -- Poses are (pitch, yaw) in degrees from the arm hanging at rest:
 -- pitch raises the arm forward, positive yaw swings it across to the left.
-local function armMotion(character: Model, wind: { number }, strike: { number }, windTime: number, strikeTime: number, hold: number)
-	local motor = shoulder(character)
-	if not motor then
-		return
-	end
-	local base = baseC0[motor] or motor.C0
-	baseC0[motor] = base
-	local token = (motionToken[motor] or 0) + 1
-	motionToken[motor] = token
-	local function poseOf(p: { number }): CFrame
-		return base * CFrame.fromEulerAnglesYXZ(math.rad(p[1]), math.rad(p[2]), math.rad(p[3] or 0))
-	end
-	local function tween(goal: CFrame, time: number, style: Enum.EasingStyle)
-		TweenService:Create(motor, TweenInfo.new(time, style, Enum.EasingDirection.Out), { C0 = goal }):Play()
-	end
-	tween(poseOf(wind), windTime, Enum.EasingStyle.Quad)
-	task.delay(windTime, function()
-		if motionToken[motor] ~= token then
-			return
-		end
-		tween(poseOf(strike), strikeTime, Enum.EasingStyle.Quint)
-		task.delay(strikeTime + hold, function()
-			if motionToken[motor] == token then
-				tween(base, 0.25, Enum.EasingStyle.Sine)
-			end
-		end)
-	end)
-end
 
 local function bladeTrail(character: Model, duration: number, offHand: boolean?)
 	local weapon = character:FindFirstChild("Weapon")
@@ -622,14 +674,14 @@ local ARCS: { [string]: { { number } } } = {
 }
 -- radius, width, duration per style
 local SWING_SIZE: { [string]: { number } } = {
-	Blade = { 5.2, 1.3, 0.3 },
-	Greatsword = { 7.4, 2.4, 0.42 },
-	Daggers = { 4, 0.8, 0.2 },
-	Scythe = { 7.6, 1.9, 0.38 },
-	Hammer = { 5.8, 2.4, 0.4 },
-	Whip = { 12.5, 0.55, 0.3 },
-	Fans = { 6.8, 1.5, 0.34 },
-	Maul = { 10, 1.8, 0.36 },
+	Blade = { 7.2, 1.9, 0.32 },
+	Greatsword = { 10, 3.2, 0.44 },
+	Daggers = { 5.4, 1.2, 0.22 },
+	Scythe = { 10.2, 2.6, 0.4 },
+	Hammer = { 8, 3.2, 0.42 },
+	Whip = { 16, 0.8, 0.32 },
+	Fans = { 9, 2, 0.36 },
+	Maul = { 13, 2.4, 0.38 },
 }
 
 local Effects: { [string]: (params: { [string]: any }) -> () } = {}
@@ -655,14 +707,20 @@ function Effects.Swing(params)
 	local style = params.Style or "Blade"
 	local combo = params.Combo or 1
 	local finisher = combo == (params.Hits or 4)
+	if style == "Maul" then
+		if CombatFX.OnBeastAttack then
+			CombatFX.OnBeastAttack(character, combo)
+		end
+	else
+		CombatAnim.Play(character, if CombatAnim.Has(style .. combo) then style .. combo else "Blade" .. ((combo - 1) % 4 + 1))
+	end
 	local frame = aimFrame(root, params.Direction, 0.5)
 	local color, accent = params.Color, params.Accent
 
 	-- Thrusts: spear and fists strike straight ahead.
 	if style == "Spear" or style == "Gauntlets" then
-		local reach = if style == "Spear" then 12 else 6
+		local reach = if style == "Spear" then 16 else 8
 		local side = if combo % 2 == 0 then -0.6 else 0.6
-		armMotion(character, { 55, if style == "Gauntlets" and combo % 2 == 0 then -20 else 10 }, { 95, 0 }, 0.04, 0.07, 0.08)
 		bladeTrail(character, 0.2, style == "Gauntlets" and combo % 2 == 0)
 		local from = frame:PointToWorldSpace(Vector3.new(side, 0.4, -1.5))
 		local to = frame:PointToWorldSpace(Vector3.new(side * 0.3, 0.4, -reach))
@@ -684,9 +742,6 @@ function Effects.Swing(params)
 		width *= 1.35
 		duration *= 1.25
 	end
-	local vertical = math.abs(arc[3]) >= 60
-	local windYaw = if arc[1] < 0 then 55 else -70
-	armMotion(character, { if vertical then 170 else 75, if vertical then 0 else windYaw }, { if vertical then 25 else 80, if vertical then 0 else -windYaw }, 0.05, 0.1, if finisher then 0.2 else 0.08)
 	bladeTrail(character, duration * 0.8, style == "Daggers" and combo % 2 == 0)
 	if style == "Daggers" or style == "Fans" then
 		bladeTrail(character, duration * 0.8, true)
@@ -727,7 +782,6 @@ function Effects.Cast(params)
 		return
 	end
 	local frame = aimFrame(root, params.Direction, 1.4)
-	armMotion(params.Caster, { 60, 40 }, { 95, -10 }, 0.06, 0.1, 0.15)
 	local sigil = frame * CFrame.new(0, 0, -2.4) * CFrame.Angles(math.rad(90), 0, 0)
 	ring(sigil, 0.6, 2.6, 0.45, 0.15, params.Color, params.Accent, 0.32, 6)
 	ring(sigil * CFrame.Angles(0, math.rad(30), 0), 1.6, 3.2, 0.25, 0.05, params.Accent, params.Color, 0.36, 6, 0.3)
@@ -881,7 +935,6 @@ function Effects.Launcher(params)
 		return
 	end
 	local frame = aimFrame(root, params.Direction, 0)
-	armMotion(params.Caster, { 15, -20 }, { 170, 10 }, 0.06, 0.12, 0.2)
 	bladeTrail(params.Caster, 0.3)
 	slash(frame, 6.2, -75, 100, 90, 1.8, params.Color, params.Accent, 0.4)
 	slash(frame * CFrame.new(0.8, 0, 0), 5, -70, 95, 82, 0.8, params.Accent, params.Color, 0.34)
@@ -897,7 +950,6 @@ function Effects.Rush(params)
 		return
 	end
 	local duration = params.Duration or 0.28
-	armMotion(character, { 90, -25 }, { 85, 30 }, 0.04, duration, 0.1)
 	bladeTrail(character, duration + 0.1)
 	rootTrail(character, params.Color, params.Accent, duration + 0.05, 2.6)
 	afterimages(character, params.Color, params.Accent, duration)
@@ -938,7 +990,6 @@ function Effects.NovaCharge(params)
 	end
 	local duration = params.Duration or 0.55
 	charging[character] = true
-	armMotion(character, { 120, 0 }, { 175, 0 }, 0.1, duration - 0.1, 0.05)
 	for i, height in { -2.4, 0, 2.4 } do
 		task.delay((i - 1) * 0.06, function()
 			if root.Parent then
@@ -989,6 +1040,7 @@ function Effects.Nova(params)
 	spikes(center, 14, radius * 0.9, 9, accent, color, 0.9, 0.06)
 	burst(center, color, accent, 18, 40, 1.1, 0.5, Vector3.new(0, 0.6, 0))
 	light(center, color, 40, 6, 0.6)
+	explosion(center, radius, color, accent, 1.1)
 
 	-- A column of light up through the caster.
 	local column = part(Vector3.new(60, 3, 3), CFrame.new(center + Vector3.new(0, 26, 0)) * CFrame.Angles(0, 0, math.rad(90)), color, Enum.Material.Neon, 0.2)
@@ -1003,7 +1055,7 @@ function Effects.Nova(params)
 
 	local own = rootOf(player.Character)
 	if own and (own.Position - center).Magnitude < radius * 1.7 then
-		CombatFX.Shake(0.75)
+		CombatFX.Shake(0.95)
 	end
 end
 
@@ -1293,9 +1345,10 @@ function Effects.Meteor(params)
 		spikes(center, 12, radius * 0.7, 9, color, accent, 1.2)
 		burst(center, color, accent, 22, 45, 1.3, 0.6, Vector3.new(0, 0.8, 0))
 		light(center, color, 50, 7, 0.7)
+		explosion(center, radius, color, accent, 1.3)
 		local camera = Workspace.CurrentCamera
 		if camera and (camera.CFrame.Position - center).Magnitude < radius * 5 then
-			CombatFX.Shake(0.7)
+			CombatFX.Shake(1)
 		end
 	end)
 end
@@ -1357,6 +1410,7 @@ function Effects.VortexBurst(params)
 	ring(CFrame.new(center), 1, params.Radius * 1.3, 2.4, 0.3, params.Color, params.Accent, 0.5, 36)
 	burst(center, params.Color, params.Accent, 18, 40, 1, 0.5)
 	light(center, params.Color, 30, 5, 0.5)
+	explosion(center, params.Radius, params.Color, params.Accent, 0.8)
 end
 
 function Effects.Trap(params)
@@ -1450,7 +1504,6 @@ function Effects.Spin(params)
 	local character = params.Caster
 	local duration: number = params.Duration or 1.2
 	local radius: number = params.Radius or 9
-	armMotion(character, { 90, 60 }, { 90, -60 }, 0.05, duration * 0.8, 0.05)
 	bladeTrail(character, duration)
 	bladeTrail(character, duration, true)
 	local turns = math.floor(duration / 0.12)
@@ -1473,7 +1526,6 @@ function Effects.SlamLeap(params)
 	if not root then
 		return
 	end
-	armMotion(character, { 170, 0 }, { 30, 0 }, 0.2, (params.Delay or 0.55) - 0.2, 0.1)
 	rootTrail(character, params.Color, params.Accent, params.Delay or 0.55, 2.6)
 	ring(CFrame.new(root.Position - Vector3.new(0, 2.8, 0)), 0.8, 5, 0.8, 0.1, params.Color, params.Accent, 0.35)
 end
@@ -1487,9 +1539,10 @@ function Effects.Slam(params)
 	flash(center, WHITE, 1, radius, 0.25, 0.3)
 	burst(center, params.Color, params.Accent, 16, 35, 1, 0.5, Vector3.new(0, 1, 0))
 	light(center, params.Color, 30, 5, 0.5)
+	explosion(center, radius, params.Color, params.Accent, 0.9)
 	local camera = Workspace.CurrentCamera
 	if camera and (camera.CFrame.Position - center).Magnitude < radius * 4 then
-		CombatFX.Shake(0.45)
+		CombatFX.Shake(0.65)
 	end
 end
 
@@ -1497,7 +1550,6 @@ function Effects.Flurry(params)
 	local character = params.Caster
 	local hits: number = params.Hits or 8
 	local range: number = params.Range or 9
-	armMotion(character, { 80, 40 }, { 90, -40 }, 0.03, hits * 0.07, 0.05)
 	bladeTrail(character, hits * 0.07 + 0.1)
 	bladeTrail(character, hits * 0.07 + 0.1, true)
 	task.spawn(function()
@@ -1525,6 +1577,9 @@ function Effects.Pillars(params)
 			local point = origin + dir * (i * (params.Spacing or 4.5))
 			spikes(point, 3, 0.9, 5.5 + i * 0.25, params.Color, params.Accent, 0.9)
 			flash(point, params.Color, 0.5, 3, 0.15)
+			if i == (params.Count or 9) then
+				explosion(point, (params.Spacing or 4.5) * 1.6, params.Color, params.Accent, 0.6)
+			end
 		end)
 	end
 end
@@ -1535,7 +1590,6 @@ function Effects.Beam(params)
 	local length: number = params.Length or 70
 	local width: number = params.Width or 4
 	local color, accent = params.Color, params.Accent
-	armMotion(character, { 90, 0 }, { 95, 0 }, 0.08, duration, 0.05)
 	local function points(root: BasePart): { Vector3 }
 		local frame = aimFrame(root, root.CFrame.LookVector, 1)
 		local from = frame:PointToWorldSpace(Vector3.new(0, 0, -1.5))
@@ -1998,6 +2052,10 @@ end
 --------------------------------------------------------------------------------
 
 local function play(kind: string, params: { [string]: any })
+	local anim = ANIM_FOR[kind]
+	if anim and type(params) == "table" and params.Caster then
+		CombatAnim.Play(params.Caster, anim)
+	end
 	local effect = Effects[kind]
 	if effect and type(params) == "table" then
 		params.Color = if typeof(params.Color) == "Color3" then params.Color else WHITE

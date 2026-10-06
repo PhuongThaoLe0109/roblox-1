@@ -25,13 +25,18 @@ Every gem has its own kit, and it grows with rarity:
 | 81-100 (1 in 400B and rarer) | + **domain** (T): a dimension that traps, slows and grinds down everyone inside |
 
 - **Melee weapons**: Crystal Blade, Prism Greatsword, Twin Facets (daggers), Geode Fists, Spire Lance (spear), Moon Scythe,
-  Monolith Hammer, Ribbon Whip, Gale Fans. Each has its own combo length, reach, arc and finisher.
+  Monolith Hammer, Ribbon Whip, Gale Fans. Each has its own combo length, reach, arc and finisher. Weapons are oversized
+  (×1.45) with wide arcs, and every swing plays its own full-body procedural animation (wind-up, strike, follow-through).
 - **Skill archetypes** (24): volleys, piercing lances, homing orbs, boomerang discs, crystal rain, meteors, launchers, rushes,
   cyclones, quakes, flurries, novas, spire lines, vortexes, rays, prisons, chain lightning, blinks, aegis shields, blooms,
   frost fields (slow), shackles (root), hooks (pull), hexes (take more damage). Each gem gets a mix picked from its
-  element (the same element as its aura), named after it ("Umbral Vortex", "Glacial Prison", ...).
+  element (the same element as its aura), named after it ("Umbral Vortex", "Glacial Prison", ...). Cooldowns are short
+  (`GemKits.CooldownScale` = 0.5) and areas are wide (`GemKits.AreaScale` = 1.35); big hits detonate with a white-hot
+  core, a shockwave dome, double floor rings, a scorch mark, embers and screen shake. Every cast has a body pose.
 - **Beasts**: Prism Golem, Pyre Wyrm, Glacier Stag, Umbral Maw, Thunder Roc, Dream Moth, Solar Lion, Star Koi. While
-  transformed your strikes become a beast maul, you take less damage and move at the beast's speed.
+  transformed your strikes become the beast's own attack (the lion swipes and pounces, the golem smashes, the stag sweeps
+  its antlers, the roc buffets, ...), you take less damage and move at the beast's speed. Beasts are skeletal rigs of rounded crystal bodies
+  (`BeastModels`), animated on the client with gaits that follow their speed, breathing, a roar and attack poses.
 - **Domains**: 8 dimensions (one per element, e.g. "Event Horizon", "Crucible of Embers"). Walls of light, a tinted sky, and
   foes inside are slowed, take damage every half second and are pushed back if they try to leave; your cooldowns run faster.
 - Damage is close between rarities (power ×1.00 to ×1.20): rarer gems win by having more tools.
@@ -122,7 +127,8 @@ src/
         ActionService  validates every CombatAction against the gem's kit, cooldowns, combos, guard
         Melee          M1 combos for every melee style
         Skills         all skill archetypes, crowd control and domains
-        BeastService   the 8 crystal beasts and transformations
+        BeastService   transformations (form, mount weld, light)
+        BeastModels    the 8 beasts as rigged organic bodies (bones = welds the client poses)
         WeaponBuilder  the 9 crystal weapons
         LifeService    spawning, shattering death, kill credit, streaks, leaderstats, safe zone
         MovementGuard  basic speed / teleport anti-cheat
@@ -136,7 +142,8 @@ src/
     Combat/
       CombatController inputs, aim, cooldowns, melee prediction, self-moving skills
       CombatFX       every combat effect (swings, projectiles, areas, domains, transformations, shattering)
-      BeastFX        animates beasts' wings, tails and heads
+      BeastFX        beast locomotion (trot / gallop / stride / flap / swim), idle, roar and attacks
+      CombatAnim     procedural R15 animations: every M1 combo step, skill casts, block guard
       Overheads      gem title, rarity, name, HP and status over every fighter
     Aura/
       Auras          draws every player's aura, Inventory "try on" preview

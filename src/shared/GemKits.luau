@@ -82,61 +82,61 @@ GemKits.Melee = {
 	Blade = melee({
 		Id = "Blade", Name = "Crystal Blade", Icon = "†", Weapon = "Blade",
 		Description = "A balanced four-hit combo; the last hit knocks back.",
-		Hits = 4, Damage = { 6, 6, 7, 11 }, Range = 8, Arc = 110, Interval = 0.32, EndLag = 0.85,
+		Hits = 4, Damage = { 6, 6, 7, 11 }, Range = 10.8, Arc = 130, Interval = 0.32, EndLag = 0.85,
 		FinisherKnockback = 55, FinisherStun = 0.55,
 	}),
 	Greatsword = melee({
 		Id = "Greatsword", Name = "Prism Greatsword", Icon = "⚔", Weapon = "Greatsword",
 		Description = "Three heavy, wide swings. Slow, but every hit lands hard.",
-		Hits = 3, Damage = { 10, 11, 17 }, Range = 10.5, Arc = 140, Interval = 0.5, EndLag = 1.0,
+		Hits = 3, Damage = { 10, 11, 17 }, Range = 14.2, Arc = 140, Interval = 0.5, EndLag = 1.0,
 		FinisherKnockback = 75, FinisherStun = 0.7,
 	}),
 	Daggers = melee({
 		Id = "Daggers", Name = "Twin Facets", Icon = "⨯", Weapon = "Daggers",
 		Description = "Two crystal daggers: a blistering five-hit combo.",
-		Hits = 5, Damage = { 4, 4, 4, 5, 9 }, Range = 6.5, Arc = 100, Interval = 0.2, EndLag = 0.7,
+		Hits = 5, Damage = { 4, 4, 4, 5, 9 }, Range = 8.8, Arc = 120, Interval = 0.2, EndLag = 0.7,
 		FinisherKnockback = 40, FinisherStun = 0.45, HitStun = 0.2,
 	}),
 	Gauntlets = melee({
 		Id = "Gauntlets", Name = "Geode Fists", Icon = "✊", Weapon = "Gauntlets",
 		Description = "Crystal-armoured fists. Short reach, long stuns.",
-		Hits = 4, Damage = { 5, 5, 6, 12 }, Range = 6, Arc = 90, Interval = 0.25, EndLag = 0.75,
+		Hits = 4, Damage = { 5, 5, 6, 12 }, Range = 8.1, Arc = 110, Interval = 0.25, EndLag = 0.75,
 		FinisherKnockback = 60, FinisherStun = 0.95, HitStun = 0.32,
 	}),
 	Spear = melee({
 		Id = "Spear", Name = "Spire Lance", Icon = "↟", Weapon = "Spear",
 		Description = "Long, narrow thrusts that keep foes at a distance.",
-		Hits = 4, Damage = { 6, 6, 7, 12 }, Range = 12.5, Arc = 50, Interval = 0.36, EndLag = 0.9,
+		Hits = 4, Damage = { 6, 6, 7, 12 }, Range = 16.9, Arc = 70, Interval = 0.36, EndLag = 0.9,
 		FinisherKnockback = 65, FinisherStun = 0.5,
 	}),
 	Scythe = melee({
 		Id = "Scythe", Name = "Moon Scythe", Icon = "☾", Weapon = "Scythe",
 		Description = "Sweeping arcs that hit all around you.",
-		Hits = 3, Damage = { 8, 9, 14 }, Range = 10, Arc = 220, Interval = 0.45, EndLag = 0.95,
+		Hits = 3, Damage = { 8, 9, 14 }, Range = 13.5, Arc = 220, Interval = 0.45, EndLag = 0.95,
 		FinisherKnockback = 50, FinisherStun = 0.6,
 	}),
 	Hammer = melee({
 		Id = "Hammer", Name = "Monolith Hammer", Icon = "⚒", Weapon = "Hammer",
 		Description = "Three crushing blows; the last one sends a shockwave through the ground.",
-		Hits = 3, Damage = { 11, 12, 16 }, Range = 9, Arc = 120, Interval = 0.6, EndLag = 1.1,
+		Hits = 3, Damage = { 11, 12, 16 }, Range = 12.2, Arc = 120, Interval = 0.6, EndLag = 1.1,
 		FinisherKnockback = 70, FinisherStun = 0.8, FinisherRadius = 10, FinisherLaunch = 35,
 	}),
 	Whip = melee({
 		Id = "Whip", Name = "Ribbon Whip", Icon = "∿", Weapon = "Whip",
 		Description = "A crystal-link whip with the longest reach of any weapon.",
-		Hits = 4, Damage = { 5, 5, 6, 10 }, Range = 15, Arc = 40, Interval = 0.38, EndLag = 0.85,
+		Hits = 4, Damage = { 5, 5, 6, 10 }, Range = 20.2, Arc = 60, Interval = 0.38, EndLag = 0.85,
 		FinisherKnockback = 45, FinisherStun = 0.5,
 	}),
 	Fans = melee({
 		Id = "Fans", Name = "Gale Fans", Icon = "◗", Weapon = "Fans",
 		Description = "Paired fans that cut with gusts of wind at mid range.",
-		Hits = 4, Damage = { 5, 5, 6, 10 }, Range = 11, Arc = 80, Interval = 0.3, EndLag = 0.8,
+		Hits = 4, Damage = { 5, 5, 6, 10 }, Range = 14.9, Arc = 100, Interval = 0.3, EndLag = 0.8,
 		FinisherKnockback = 60, FinisherStun = 0.45, FinisherLaunch = 30,
 	}),
 	Maul = melee({
 		Id = "Maul", Name = "Beast Maul", Icon = "✹", Weapon = "None",
 		Description = "Your beast's colossal strikes.",
-		Hits = 3, Damage = { 13, 13, 20 }, Range = 15, Arc = 170, Interval = 0.42, EndLag = 0.9,
+		Hits = 3, Damage = { 13, 13, 20 }, Range = 20.2, Arc = 170, Interval = 0.42, EndLag = 0.9,
 		FinisherKnockback = 80, FinisherStun = 0.7, FinisherRadius = 12, FinisherLaunch = 30,
 	}),
 }
@@ -202,6 +202,11 @@ GemKits.Archetypes = {
 
 -- Values multiplied by the gem's power.
 local SCALED = { Damage = true, Burst = true, Absorb = true, Heal = true }
+
+-- Global tuning: every cooldown is halved, every area is 35% wider.
+GemKits.CooldownScale = 0.5
+GemKits.AreaScale = 1.35
+local AREA_KEYS = { "Radius", "Length", "Width", "JumpRange", "Spacing" }
 
 -- Every key a kit can bind, in HUD order.
 GemKits.AllKeys = { "Z", "X", "C", "V", "G", "T" }
@@ -349,6 +354,13 @@ local function makeSkill(archetype: string, key: string, name: string, power: nu
 	end
 	for k, v in extra or {} do
 		skill[k] = v
+	end
+	-- Snappy cooldowns, wide areas.
+	skill.Cooldown = math.max(1, math.floor(skill.Cooldown * GemKits.CooldownScale * 2 + 0.5) / 2)
+	for _, key in AREA_KEYS do
+		if type(skill[key]) == "number" then
+			skill[key] = math.floor(skill[key] * GemKits.AreaScale * 10 + 0.5) / 10
+		end
 	end
 	skill.Description = fill(base.Text, skill)
 	return table.freeze(skill) :: any
