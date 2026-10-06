@@ -19,6 +19,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local CombatConfig = require(ReplicatedStorage:WaitForChild("CombatConfig"))
@@ -29,6 +30,10 @@ local Cutscene = require(script.Parent:WaitForChild("Cutscene"))
 local Toon = require(script.Parent.Parent:WaitForChild("Toon"))
 
 local player = Players.LocalPlayer
+
+-- Phones and tablets get lighter effects (no soft bloom layer on slashes,
+-- fewer charge motes) so crowded fights stay smooth.
+local LITE = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
 local CombatFX = {}
 
@@ -278,7 +283,7 @@ local function slash(frame: CFrame, radius: number, a0: number, a1: number, roll
 		colorsInk[i + 1] = inkColor
 	end
 	local start = pointsAt(1)
-	local glow = ribbon(start, widthsOf(width * 2.2), colorsGlow)
+	local glow = if LITE then nil else ribbon(start, widthsOf(width * 2.2), colorsGlow)
 	local ink = ribbon(start, widthsOf(width * 1.4), colorsInk)
 	local body = ribbon(start, widthsOf(width), colorsBody)
 	local core = ribbon(start, widthsOf(width * 0.42), colorsCore)
@@ -292,7 +297,10 @@ local function slash(frame: CFrame, radius: number, a0: number, a1: number, roll
 	for _, beam in core.Beams do
 		beam.ZOffset = 0.2
 	end
-	local layers = { { glow, 0.78 }, { ink, 0.05 }, { body, 0 }, { core, 0 } }
+	local layers: { { any } } = { { ink, 0.05 }, { body, 0 }, { core, 0 } }
+	if glow then
+		table.insert(layers, 1, { glow, 0.78 })
+	end
 	local sweep = duration * 0.3
 	run(duration, function(_, elapsed)
 		local head = math.min(1, elapsed / sweep)
@@ -1145,7 +1153,7 @@ local function gather(character: Instance?, duration: number, color: Color3, acc
 		return root.Position + Vector3.new(0, 0.8, 0)
 	end
 	-- Motes and streaks rushing inward, spread over the charge.
-	local count = math.floor(10 + 12 * power)
+	local count = math.floor((10 + 12 * power) * (if LITE then 0.5 else 1))
 	for i = 1, count do
 		task.delay((i / count) * duration * 0.7, function()
 			if interrupted() then
@@ -2359,6 +2367,31 @@ end
 -- Entry points
 --------------------------------------------------------------------------------
 
+-- Effects further than this from the camera are skipped (their body motion
+-- still plays). Ultimates and anything involving you always play.
+local FX_CULL = 380
+local ALWAYS = { Domain = true, DomainEnd = true, Transform = true, TransformEnd = true, BeamEnd = true, ProjectileEnd = true, ProjectileSteer = true, Shatter = true, Spawn = true }
+
+local function anchorOf(params: { [string]: any }): Vector3?
+	for _, key in { "Position", "Center", "Origin" } do
+		local v = params[key]
+		if typeof(v) == "Vector3" then
+			return v
+		end
+	end
+	local root = rootOf(params.Caster) or rootOf(params.Target)
+	return if root then root.Position else nil
+end
+
+local function tooFar(kind: string, params: { [string]: any }): boolean
+	if ALWAYS[kind] or isLocal(params.Caster) or isLocal(params.Target) or isLocal(params.Attacker) then
+		return false
+	end
+	local camera = Workspace.CurrentCamera
+	local at = anchorOf(params)
+	return camera ~= nil and at ~= nil and (at - camera.CFrame.Position).Magnitude > FX_CULL
+end
+
 local function play(kind: string, params: { [string]: any })
 	if type(params) == "table" and params.Caster then
 		if kind == "BeamEnd" then
@@ -2371,7 +2404,7 @@ local function play(kind: string, params: { [string]: any })
 		end
 	end
 	local effect = Effects[kind]
-	if effect and type(params) == "table" then
+	if effect and type(params) == "table" and not tooFar(kind, params) then
 		params.Color = if typeof(params.Color) == "Color3" then params.Color else WHITE
 		params.Accent = if typeof(params.Accent) == "Color3" then params.Accent else Theme.Colors.Lavender
 		local ok, err = pcall(effect, params)

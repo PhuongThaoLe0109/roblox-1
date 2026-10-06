@@ -235,8 +235,26 @@ function MovementHud.Init(screen: ScreenGui, context)
 	})
 
 	local state = MovementController.State
+	-- On touch screens the column sits above Roblox's jump button (which takes
+	-- the bottom-right corner: 70 px at 95/90 from the edges on small screens,
+	-- 120 px at 170/210 on large ones) and the text hint is dropped, so nothing
+	-- overlaps the jump button or the combo counter.
+	local function place(device: string)
+		if device ~= "Touch" then
+			root.Position = UDim2.new(1, -28, 1, -28)
+			return
+		end
+		local camera = workspace.CurrentCamera
+		local size = if camera then camera.ViewportSize else Vector2.new(1366, 768)
+		local uiScale = math.clamp(math.min(size.X / 1366, size.Y / 768), 0.55, 1.3)
+		local jumpTop = if math.min(size.X, size.Y) <= 500 then 90 else 210
+		root.Position = UDim2.new(1, -28, 1, -(jumpTop / uiScale) - 6)
+	end
+
 	local function setDevice(device: string)
 		local keys = KEYS[device]
+		place(device)
+		jumpHint.Visible = device ~= "Touch"
 		boardKey.Text = keys.Board
 		boardKey.Visible = keys.Board ~= ""
 		descendKey.Text = keys.Descend
@@ -249,6 +267,11 @@ function MovementHud.Init(screen: ScreenGui, context)
 		device = deviceOf(inputType)
 		setDevice(device)
 	end)
+	if workspace.CurrentCamera then
+		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			place(device)
+		end)
+	end
 	local function refresh()
 		local riding = state.Riding
 		board.Visible = MovementController.CanRide() or riding

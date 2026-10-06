@@ -129,7 +129,7 @@ end
 --------------------------------------------------------------------------------
 
 function MovementController.Dash()
-	if not humanoid or not root or humanoid.Health <= 0 or state.Riding then
+	if not humanoid or not root or humanoid.Health <= 0 or state.Riding or os.clock() < state.FrozenUntil then
 		return
 	end
 	local clock = os.clock()
@@ -507,7 +507,7 @@ function MovementController.ToggleBroom()
 		return
 	end
 	local want = not state.Riding
-	if want and (not MovementController.CanRide() or MovementController.BroomCooldown() > 0) then
+	if want and (not MovementController.CanRide() or MovementController.BroomCooldown() > 0 or os.clock() < state.FrozenUntil) then
 		return
 	end
 	pendingBroom = true

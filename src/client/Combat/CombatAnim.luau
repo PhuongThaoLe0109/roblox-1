@@ -476,6 +476,9 @@ A.NovaCharge = anim(0.6, {
 A.NovaRelease = swing(0.6, NOVA_GATHER, {
 	RShoulder = { 125, 0, 85 }, LShoulder = { 125, 0, -85 }, RElbow = { 0 }, LElbow = { 0 }, Root = { 14 }, Neck = { 28 }, Waist = { -12 }, RHip = { -5 }, LHip = { -5 },
 }, 0.2)
+-- Every skill archetype has a motion of its own name (Slam and Nova play in two parts).
+A.Nova = A.NovaRelease
+A.Slam = A.SlamLeap
 -- Beam: both palms driven forward and held for the whole ray.
 local BEAM_PUSH: Pose = { RShoulder = { 92, -12 }, LShoulder = { 92, 12 }, RElbow = { -5 }, LElbow = { -5 }, Root = { 6 }, Waist = { 0, 8 }, RHip = { -15 }, LHip = { 28 }, LKnee = { -28 }, Neck = { -4 } }
 A.Beam = anim(0.7, {
@@ -982,10 +985,20 @@ local function wantsState(character: Model): boolean
 	return character:GetAttribute(STATUS.Blocking) == true or character:FindFirstChild("HumanoidRootPart") ~= nil
 end
 
+-- Characters further than this from the camera are left as they are (only
+-- the guard, actions and movement of nearby fighters are worth the work).
+local ANIM_CULL = 320
+
 function CombatAnim.Start()
 	RunService.RenderStepped:Connect(function(dt)
+		local camera = Workspace.CurrentCamera
+		local eye = if camera then camera.CFrame.Position else nil
 		for _, player in Players:GetPlayers() do
 			local character = player.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			if eye and root and root:IsA("BasePart") and (root.Position - eye).Magnitude > ANIM_CULL then
+				continue
+			end
 			if character then
 				local state = states[character]
 				if not state and wantsState(character) then

@@ -78,6 +78,7 @@ Offline checks:
 tools/kit-check.sh path/to/luau      # all 100 kits: skill counts, names, keys, descriptions
 tools/combat-check.sh path/to/luau   # builds the 8 beasts and 9 weapons against the Roblox stub, then runs kit-check
 tools/anim-check.sh path/to/luau     # every animation on R15 + R6 dummies, holds, stuns, movement layers, the broom
+tools/fx-check.sh                    # every server effect has a client handler, every archetype a motion, valid font weights
 ```
 
 ## Look: cel-shaded anime (`src/client/Toon.luau`)
@@ -94,6 +95,15 @@ Roblox has no custom shaders, so the "3D anime with a 2D finish" look is faked:
 - **Impact**: heavy blows you land or take, and explosions next to you, add a two-frame impact flash (white, then
   dark), screen-space speed lines and a ~50 ms hit-stop (effects and body motion freeze); angular crystal wedges fly
   off every hit.
+
+## Performance & phones
+
+- Auras past 300 studs are unparented; combat effects past 380 studs are skipped (their body motion still plays, and
+  anything involving you always plays); characters past 320 studs aren't animated; ink outlines past 260 studs are off.
+- Touch devices get lighter effects (no bloom layer on slashes, half the charge motes).
+- On touch screens the broom / dash column sits above Roblox's jump button, the text hint is dropped, the combo
+  counter moves to the left and the skill bar column shifts right just enough to clear the Roll panel, so nothing
+  overlaps from 640×360 phones up to tablets.
 
 ## Gems & rolling
 
