@@ -80,6 +80,21 @@ tools/combat-check.sh path/to/luau   # builds the 8 beasts and 9 weapons against
 tools/anim-check.sh path/to/luau     # every animation on R15 + R6 dummies, holds, stuns, movement layers, the broom
 ```
 
+## Look: cel-shaded anime (`src/client/Toon.luau`)
+
+Roblox has no custom shaders, so the "3D anime with a 2D finish" look is faked:
+
+- **Ink outlines**: Highlights in a dark ink of the gem colour around weapons, beasts, brooms, tier 4-5 auras,
+  projectiles, crystal spikes, the meteor and explosion domes. Roblox renders at most 31 Highlights, so every one goes
+  through `Toon`: 28 slots, by priority (hit flashes, beasts, effects, gear, auras), then nearest to the camera; nothing
+  past 260 studs.
+- **Banded colour**: slashes are a dark ink outline, the saturated gem colour and a white-hot core (thick in the middle,
+  thin at both ends) and fade in hard steps; weapon, broom and projectile trails use hard colour / transparency bands;
+  big shock rings carry an ink ring behind them.
+- **Impact**: heavy blows you land or take, and explosions next to you, add a two-frame impact flash (white, then
+  dark), screen-space speed lines and a ~50 ms hit-stop (effects and body motion freeze); angular crystal wedges fly
+  off every hit.
+
 ## Gems & rolling
 
 - `src/shared/GemCatalog.luau` lists the 100 gems from most common (Quartz) to rarest (The First Light).
@@ -160,6 +175,7 @@ src/
   client/          -> StarterPlayer.StarterPlayerScripts
     Main.client      entry point (ScreenGui + responsive UIScale)
     MapFX            client-side animation of the world's decoration
+    Toon             cel-shaded look: ink outlines (Highlight budget, nearest first), impact frames, speed lines, hit-stop
     ClientData       local mirror of inventory / equipped gem / rolls
     Movement/        MovementController (run, dash, double jump, broom flight, combat speeds), MovementFX
     Combat/

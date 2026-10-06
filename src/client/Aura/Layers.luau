@@ -13,6 +13,10 @@
 
 local Layers = {}
 
+-- Set by Auras: hands every Highlight a layer makes to the shared outline
+-- budget (Toon), since Roblox only renders 31 at once.
+Layers.OnHighlight = nil :: ((Highlight) -> ())?
+
 export type Context = {
 	Parent: Instance,
 	Color: Color3,
@@ -790,6 +794,9 @@ function Layers.Charge(ctx: Context, spec): Update
 	highlight.FillTransparency = spec.Fill or 0.75
 	highlight.OutlineTransparency = spec.Outline or 0.15
 	highlight.Parent = ctx.Parent
+	if Layers.OnHighlight then
+		Layers.OnHighlight(highlight)
+	end
 	local base = highlight.FillTransparency
 	local speed = spec.Speed or 3
 	return function(t)
@@ -1045,6 +1052,9 @@ function Layers.Colossus(ctx: Context, spec): Update
 	outline.DepthMode = Enum.HighlightDepthMode.Occluded
 	outline.Adornee = model
 	outline.Parent = ctx.Parent
+	if Layers.OnHighlight then
+		Layers.OnHighlight(outline)
+	end
 
 	-- Fade out while the camera is inside or right behind the giant (only for
 	-- the wearer's own view), so it never blocks your sight.

@@ -5,6 +5,12 @@
 -- transparency sequences give the show's soft gradients), PointLights and
 -- Highlights. Every effect uses the caster's gem colours.
 --
+-- The look is cel-shaded anime: effects are built in bands (a white-hot core,
+-- the gem colour, then a dark ink edge, Toon.Ink), slashes and shock rings
+-- carry an ink outline behind their glow and fade in hard steps, big pieces
+-- get Highlight ink outlines (through Toon's budget), and heavy blows that
+-- involve you add an impact frame, speed lines and a short hit-stop.
+--
 -- The local player's own swings / casts are drawn immediately by
 -- CombatController (CombatFX.Play) and the server echo is skipped, so attacks
 -- feel instant.
@@ -20,6 +26,7 @@ local Theme = require(script.Parent.Parent:WaitForChild("UI"):WaitForChild("Them
 local Auras = require(script.Parent.Parent:WaitForChild("Aura"):WaitForChild("Auras"))
 local CombatAnim = require(script.Parent:WaitForChild("CombatAnim"))
 local Cutscene = require(script.Parent:WaitForChild("Cutscene"))
+local Toon = require(script.Parent.Parent:WaitForChild("Toon"))
 
 local player = Players.LocalPlayer
 
@@ -130,11 +137,14 @@ end
 -- Runs step(alpha, elapsed) every frame for `duration`, then cleanup().
 -- Animates an effect over `duration` seconds of effect time (slowed down
 -- during ultimate cutscenes). `step` may return true to end early.
+local frozenUntil = 0 -- hit-stop: effects hold still until then
 local function run(duration: number, step: (number, number) -> boolean?, cleanup: (() -> ())?)
 	local elapsed = 0
 	local connection
 	connection = RunService.Heartbeat:Connect(function(dt)
-		elapsed += dt * Cutscene.TimeScale
+		if os.clock() >= frozenUntil then
+			elapsed += dt * Cutscene.TimeScale
+		end
 		local alpha = math.min(1, elapsed / duration)
 		local ok, err = pcall(step, alpha, elapsed)
 		if not ok or alpha >= 1 or err == true then
@@ -235,8 +245,11 @@ end
 
 -- A crescent slash sweeping from angle a0 to a1 (degrees) in the XZ plane of
 -- `frame` (forward = -Z), rolled about the forward axis by `roll` degrees.
+-- Drawn like an anime smear: a dark ink outline, the saturated gem colour, a
+-- white-hot core and a faint bloom; thick in the middle, thin at the ends,
+-- fading out in hard steps rather than a soft blur.
 local function slash(frame: CFrame, radius: number, a0: number, a1: number, roll: number, width: number, color: Color3, accent: Color3, duration: number)
-	local n = 16
+	local n = 12
 	local plane = frame * CFrame.Angles(0, 0, math.rad(roll))
 	local function pointsAt(scale: number): { Vector3 }
 		local list = {}
@@ -251,46 +264,107 @@ local function slash(frame: CFrame, radius: number, a0: number, a1: number, roll
 		for i = 0, n do
 			local t = i / n
 			-- Crescent: thin tail, thick just behind the head, sharp tip.
-			list[i + 1] = w * (0.08 + 0.92 * math.sin(math.pi * math.min(1, t * 0.85 + 0.08)) * t ^ 0.6)
+			list[i + 1] = w * (0.06 + 0.94 * math.sin(math.pi * math.min(1, t * 0.85 + 0.08)) * t ^ 0.6)
 		end
 		return list
 	end
-	local colorsCore, colorsGlow = {}, {}
+	local inkColor = Toon.Ink(color)
+	local colorsBody, colorsCore, colorsGlow, colorsInk = {}, {}, {}, {}
 	for i = 0, n do
 		local t = 1 - i / n
-		colorsCore[i + 1] = grad(color, accent, t * 0.8)
+		colorsBody[i + 1] = grad(color, accent, t * 0.8)
+		colorsCore[i + 1] = lerp(WHITE, Toon.Shade(color, 0.6), t * 0.5)
 		colorsGlow[i + 1] = grad(color, accent, 0.3 + t * 0.7)
+		colorsInk[i + 1] = inkColor
 	end
-	local glow = ribbon(pointsAt(1), widthsOf(width * 2.3), colorsGlow)
-	local core = ribbon(pointsAt(1), widthsOf(width), colorsCore)
-	local sweep = duration * 0.32
+	local start = pointsAt(1)
+	local glow = ribbon(start, widthsOf(width * 2.2), colorsGlow)
+	local ink = ribbon(start, widthsOf(width * 1.4), colorsInk)
+	local body = ribbon(start, widthsOf(width), colorsBody)
+	local core = ribbon(start, widthsOf(width * 0.42), colorsCore)
+	for _, beam in ink.Beams do
+		beam.LightEmission = 0
+		beam.ZOffset = -0.2
+	end
+	for _, beam in body.Beams do
+		beam.LightEmission = 0.45
+	end
+	for _, beam in core.Beams do
+		beam.ZOffset = 0.2
+	end
+	local layers = { { glow, 0.78 }, { ink, 0.05 }, { body, 0 }, { core, 0 } }
+	local sweep = duration * 0.3
 	run(duration, function(_, elapsed)
 		local head = math.min(1, elapsed / sweep)
-		local scale = 1 + 0.18 * easeOut(math.min(1, elapsed / duration))
+		local scale = 1 + 0.16 * easeOut(math.min(1, elapsed / duration))
 		local points = pointsAt(scale)
-		ribbonMove(glow, points)
-		ribbonMove(core, points)
 		local fadeSpan = duration - sweep
-		local function fade(base: number)
-			return function(i: number): number
+		for _, layer in layers do
+			local r, base = layer[1], layer[2]
+			ribbonMove(r, points)
+			ribbonFade(r, function(i: number): number
 				local t = (i - 1) / n
 				if t > head + 1e-3 then
 					return 1
 				end
-				local since = elapsed - t * sweep
-				return base + (1 - base) * math.clamp(since / fadeSpan, 0, 1) ^ 1.5
-			end
+				-- Hard steps (anime frames) instead of a smooth fade.
+				local since = math.clamp((elapsed - t * sweep) / fadeSpan, 0, 1)
+				local stepped = math.floor(since * 4) / 4
+				return base + (1 - base) * stepped ^ 1.2
+			end)
 		end
-		ribbonFade(glow, fade(0.55))
-		ribbonFade(core, fade(0))
+		return nil
 	end, function()
-		ribbonDestroy(glow)
-		ribbonDestroy(core)
+		for _, layer in layers do
+			ribbonDestroy(layer[1])
+		end
 	end)
 end
 
--- A glowing ring in the XZ plane of `frame` growing from r0 to r1.
-local function ring(frame: CFrame, r0: number, r1: number, w0: number, w1: number, color: Color3, accent: Color3, duration: number, sides: number?, startTransparency: number?)
+-- Angular crystal fragments (wedges) tumbling out of `position`.
+local function shards(position: Vector3, color: Color3, accent: Color3, count: number, speed: number, size: number, life: number, bias: Vector3?)
+	for i = 1, count do
+		local dir = Vector3.new(math.random() - 0.5, math.random() * 0.8 - 0.1, math.random() - 0.5)
+		if bias then
+			dir += bias
+		end
+		dir = if dir.Magnitude > 1e-3 then dir.Unit else Vector3.yAxis
+		local s = size * (0.5 + math.random() * 0.8)
+		local wedge = Instance.new("WedgePart")
+		wedge.Anchored = true
+		wedge.CanCollide = false
+		wedge.CanQuery = false
+		wedge.CanTouch = false
+		wedge.CastShadow = false
+		wedge.Material = if i % 3 == 0 then Enum.Material.Neon else Enum.Material.Glass
+		wedge.Color = if i % 3 == 0 then WHITE elseif i % 2 == 0 then color else Toon.Shade(accent, -0.35)
+		wedge.Transparency = if wedge.Material == Enum.Material.Glass then 0.1 else 0
+		wedge.Size = Vector3.new(s * 0.4, s, s * 0.7)
+		wedge.CFrame = CFrame.new(position)
+		wedge.Parent = folder
+		local v = dir * speed * (0.6 + math.random() * 0.6)
+		local spin = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 16
+		local base = wedge.Transparency
+		run(life * (0.7 + math.random() * 0.5), function(alpha, elapsed)
+			local p = position + v * elapsed + Vector3.new(0, -28 * elapsed * elapsed, 0)
+			wedge.CFrame = CFrame.new(p) * CFrame.Angles(spin.X * elapsed, spin.Y * elapsed, spin.Z * elapsed)
+			wedge.Transparency = base + (1 - base) * alpha ^ 2
+			return nil
+		end, function()
+			wedge:Destroy()
+		end)
+	end
+end
+
+-- A heavy blow that involves you: impact frame, speed lines, hit-stop.
+local function impact(position: Vector3, color: Color3, strength: number)
+	Toon.ImpactFrame(strength)
+	Toon.SpeedLines(position, color, math.floor(14 + 8 * strength))
+	Toon.HitStop(0.05)
+end
+
+-- With `ink`, it is the dark outline band drawn behind a bright ring.
+local function ring(frame: CFrame, r0: number, r1: number, w0: number, w1: number, color: Color3, accent: Color3, duration: number, sides: number?, startTransparency: number?, ink: boolean?)
 	local n = sides or 28
 	local function pointsAt(radius: number): { Vector3 }
 		local list = {}
@@ -306,6 +380,14 @@ local function ring(frame: CFrame, r0: number, r1: number, w0: number, w1: numbe
 		widths[i + 1] = w0
 	end
 	local r = ribbon(pointsAt(r0), widths, colors)
+	if ink then
+		local dark = Toon.Ink(color)
+		for _, beam in r.Beams do
+			beam.Color = ColorSequence.new(dark)
+			beam.LightEmission = 0
+			beam.ZOffset = -0.2
+		end
+	end
 	local base = startTransparency or 0.05
 	run(duration, function(alpha)
 		local e = easeOut(alpha)
@@ -382,6 +464,14 @@ local function spikes(center: Vector3, count: number, radius: number, height: nu
 		return
 	end
 	task.delay(delay or 0, function()
+		-- One ink outline around the whole crown of spikes.
+		local group = Instance.new("Model")
+		group.Name = "Spikes"
+		group.Parent = folder
+		Toon.Outline(group, color, Toon.Priority.Effect, 1, group)
+		task.delay(life + 0.1, function()
+			group:Destroy()
+		end)
 		for i = 1, count do
 			local a = (i / count + math.random() * 0.04) * math.pi * 2
 			local h = height * (0.7 + math.random() * 0.5)
@@ -391,6 +481,8 @@ local function spikes(center: Vector3, count: number, radius: number, height: nu
 			local tilt = CFrame.fromAxisAngle(outward:Cross(Vector3.yAxis), -math.rad(18 + math.random() * 14))
 			local shell = part(Vector3.new(w, h, w), CFrame.new(), if i % 2 == 0 then color else accent, Enum.Material.Glass, 0.15)
 			local core = part(Vector3.new(w * 0.45, h * 0.92, w * 0.45), CFrame.new(), WHITE)
+			shell.Parent = group
+			core.Parent = group
 			local spin = CFrame.Angles(0, math.rad(45), 0)
 			local function place(rise: number)
 				local cf = CFrame.new(base) * tilt * CFrame.new(0, h / 2 - h * (1 - rise), 0) * spin
@@ -428,9 +520,11 @@ local function explosion(center: Vector3, radius: number, color: Color3, accent:
 	flash(center, WHITE, 1.5, radius * 0.55 * k, 0.16, 0.05)
 	flash(center, accent, 2, radius * 0.9, 0.3, 0.3)
 
-	-- Shockwave dome: a hollow glass sphere sweeping to the edge of the area.
+	-- Shockwave dome: a hollow glass sphere sweeping to the edge of the area,
+	-- inked around its rim.
 	local dome = part(Vector3.one, CFrame.new(ground), color, Enum.Material.Glass, 0.4)
 	dome.Shape = Enum.PartType.Ball
+	Toon.Outline(dome, color, Toon.Priority.Effect, 1, folder)
 	run(0.42, function(alpha)
 		local d = radius * 2.1 * easeOut(alpha)
 		dome.Size = Vector3.new(d, d * 0.55, d)
@@ -444,8 +538,15 @@ local function explosion(center: Vector3, radius: number, color: Color3, accent:
 	local floor = CFrame.new(ground + Vector3.new(0, 0.25, 0))
 	ring(floor, radius * 0.2, radius * 1.15, 1.2 * k, 0.15, WHITE, accent, 0.3, 44, 0)
 	task.delay(0.05, function()
+		ring(floor * CFrame.new(0, 0.05, 0), radius * 0.1, radius, 4.8 * k, 0.8, color, accent, 0.65, 44, 0.05, true)
 		ring(floor * CFrame.new(0, 0.1, 0), radius * 0.1, radius, 3.2 * k, 0.5, color, accent, 0.65, 44)
 	end)
+	shards(center, color, accent, math.floor(8 + 6 * k), 40, 1.6, 0.8, Vector3.new(0, 0.6, 0))
+	-- Felt up close: impact frame, speed lines, hit-stop.
+	local own = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if own and own:IsA("BasePart") and (own.Position - center).Magnitude < radius * 1.6 then
+		impact(center, color, math.min(1, 0.6 + 0.3 * k))
+	end
 
 	-- Scorch: a dark glossy disc that lingers and fades, so the hit leaves a mark.
 	local scorch = part(Vector3.new(0.15, 1, 1), CFrame.new(ground + Vector3.new(0, 0.08, 0)) * CFrame.Angles(0, 0, math.rad(90)), lerp(color, Color3.new(0.05, 0.03, 0.08), 0.7), Enum.Material.Glass, 0.25)
@@ -597,6 +698,7 @@ local function hitFlash(character: Instance, color: Color3)
 	highlight.DepthMode = Enum.HighlightDepthMode.Occluded
 	highlight.Adornee = character
 	highlight.Parent = folder
+	Toon.Register(highlight, Toon.Priority.Hit)
 	run(0.18, function(alpha)
 		highlight.FillTransparency = 0.25 + 0.75 * alpha
 		highlight.OutlineTransparency = alpha
@@ -871,6 +973,7 @@ function Effects.Projectile(params)
 
 	local parts, spinOf = projectileBody(params.Shape or "Shard", color, accent)
 	local core = parts[1]
+	Toon.Outline(parts[2] or core, color, Toon.Priority.Effect, 1, folder)
 	local pl = Instance.new("PointLight")
 	pl.Color = color
 	pl.Range = if params.Shape == "Lance" then 16 else 10
@@ -886,12 +989,23 @@ function Effects.Projectile(params)
 	trail.LightEmission = 1
 	trail.LightInfluence = 0
 	trail.FaceCamera = true
+	-- Banded like a cel-shaded smear: white-hot, the gem colour, the accent.
 	trail.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, WHITE),
-		ColorSequenceKeypoint.new(0.3, color),
+		ColorSequenceKeypoint.new(0.18, WHITE),
+		ColorSequenceKeypoint.new(0.2, color),
+		ColorSequenceKeypoint.new(0.6, color),
+		ColorSequenceKeypoint.new(0.62, accent),
 		ColorSequenceKeypoint.new(1, accent),
 	})
-	trail.Transparency = NumberSequence.new(0.1, 1)
+	trail.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.05),
+		NumberSequenceKeypoint.new(0.6, 0.05),
+		NumberSequenceKeypoint.new(0.62, 0.45),
+		NumberSequenceKeypoint.new(0.86, 0.45),
+		NumberSequenceKeypoint.new(0.88, 1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
 	trail.WidthScale = NumberSequence.new(1, 0.1)
 	trail.Parent = core
 
@@ -1151,8 +1265,12 @@ function Effects.Hit(params)
 	local color, accent = params.Color, params.Accent
 	local camera = Workspace.CurrentCamera
 	local facing = if camera then CFrame.lookAt(position, camera.CFrame.Position) * CFrame.Angles(math.rad(90), 0, 0) else CFrame.new(position)
+	if heavy then
+		ring(facing, 0.5, 5.5, 1.3, 0.1, color, accent, 0.32, 18, 0.05, true)
+	end
 	ring(facing, 0.5, if heavy then 5.5 else 3.2, if heavy then 0.8 else 0.5, 0.05, color, accent, if heavy then 0.32 else 0.22, 18)
 	burst(position, color, accent, if heavy then 12 else 7, if heavy then 34 else 22, if heavy then 1 else 0.7, 0.3)
+	shards(position, color, accent, if heavy then 7 else 3, if heavy then 26 else 16, if heavy then 0.9 else 0.6, 0.45)
 	flash(position, WHITE, 0.6, if heavy then 4.5 else 2.6, 0.14, 0.25)
 	light(position, color, if heavy then 18 else 10, 3, 0.25)
 	if typeof(target) == "Instance" then
@@ -1165,6 +1283,10 @@ function Effects.Hit(params)
 		CombatFX.Shake(if heavy then 0.55 else 0.22)
 	elseif heavy then
 		CombatFX.Shake(0.12)
+	end
+	-- Heavy blows you land or take: impact frame, speed lines, hit-stop.
+	if heavy and (isLocal(target) or isLocal(params.Attacker)) then
+		impact(position, color, 0.8)
 	end
 end
 
@@ -1403,6 +1525,7 @@ function Effects.Meteor(params)
 	local from = center + Vector3.new(30, 90, 30)
 	local shell = part(Vector3.one * 7, CFrame.new(from), color, Enum.Material.Glass, 0.1)
 	local core = part(Vector3.one * 4, CFrame.new(from), WHITE)
+	Toon.Outline(shell, color, Toon.Priority.Effect, 1, folder)
 	local a0 = attachment(Vector3.new(3, 0, 0), core)
 	local a1 = attachment(Vector3.new(-3, 0, 0), core)
 	local trail = Instance.new("Trail")
@@ -2271,6 +2394,10 @@ function CombatFX.Start()
 	host.Name = "Anchor"
 	startShake()
 	Cutscene.OnShake = CombatFX.Shake
+	table.insert(Toon.OnHitStop, function(seconds: number)
+		frozenUntil = math.max(frozenUntil, os.clock() + seconds)
+	end)
+	table.insert(Toon.OnHitStop, CombatAnim.HitStop)
 
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local remote = remotes:WaitForChild("CombatFX") :: RemoteEvent

@@ -192,14 +192,21 @@ function MovementService.BuildBroom(character: Model, root: BasePart, color: Col
 	trail.LightEmission = 1
 	trail.LightInfluence = 0
 	trail.FaceCamera = true
+	-- Cel-shaded streak: hard bands of white, the gem colour and the accent.
 	trail.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, WHITE),
-		ColorSequenceKeypoint.new(0.25, color),
+		ColorSequenceKeypoint.new(0.14, WHITE),
+		ColorSequenceKeypoint.new(0.16, color),
+		ColorSequenceKeypoint.new(0.6, color),
+		ColorSequenceKeypoint.new(0.62, accent),
 		ColorSequenceKeypoint.new(1, accent),
 	})
 	trail.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.15),
-		NumberSequenceKeypoint.new(0.6, 0.55),
+		NumberSequenceKeypoint.new(0, 0.1),
+		NumberSequenceKeypoint.new(0.6, 0.1),
+		NumberSequenceKeypoint.new(0.62, 0.5),
+		NumberSequenceKeypoint.new(0.85, 0.5),
+		NumberSequenceKeypoint.new(0.87, 1),
 		NumberSequenceKeypoint.new(1, 1),
 	})
 	trail.WidthScale = NumberSequence.new({

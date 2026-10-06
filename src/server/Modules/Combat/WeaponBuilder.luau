@@ -78,13 +78,24 @@ local function trail(handle: BasePart, from: number, to: number, color: Color3, 
 	t.MinLength = 0.05
 	t.LightEmission = 1
 	t.LightInfluence = 0
+	-- Cel-shaded smear: hard bands (white-hot, the gem colour, a dark shadow
+	-- tone) and a stepped fade instead of a soft blur.
+	local h, sat, v = accent:ToHSV()
+	local shadow = Color3.fromHSV(h, math.min(1, sat * 1.2 + 0.1), v * 0.45)
 	t.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, WHITE),
-		ColorSequenceKeypoint.new(0.4, color),
-		ColorSequenceKeypoint.new(1, accent),
+		ColorSequenceKeypoint.new(0.16, WHITE),
+		ColorSequenceKeypoint.new(0.18, color),
+		ColorSequenceKeypoint.new(0.58, color),
+		ColorSequenceKeypoint.new(0.6, shadow),
+		ColorSequenceKeypoint.new(1, shadow),
 	})
 	t.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.05),
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.56, 0),
+		NumberSequenceKeypoint.new(0.58, 0.3),
+		NumberSequenceKeypoint.new(0.82, 0.3),
+		NumberSequenceKeypoint.new(0.84, 0.75),
 		NumberSequenceKeypoint.new(1, 1),
 	})
 	t.Enabled = false

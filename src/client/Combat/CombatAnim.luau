@@ -27,6 +27,34 @@ local STATUS = CombatConfig.Status
 
 local CombatAnim = {}
 
+-- Animation time: the real clock minus any hit-stop pauses (a heavy blow
+-- freezes every action for a moment).
+local pauseOffset = 0
+local pauseStart: number? = nil
+local pauseUntil = 0
+local function now(): number
+	local c = os.clock()
+	if pauseStart then
+		if c < pauseUntil then
+			return pauseStart - pauseOffset
+		end
+		pauseOffset += pauseUntil - pauseStart
+		pauseStart = nil
+	end
+	return c - pauseOffset
+end
+
+-- Freezes every action for `seconds` (hit-stop).
+function CombatAnim.HitStop(seconds: number)
+	local c = os.clock()
+	if pauseStart then
+		pauseUntil = math.max(pauseUntil, c + seconds)
+	else
+		pauseStart = c
+		pauseUntil = c + seconds
+	end
+end
+
 -- joint -> { part, motor }
 local JOINTS = {
 	Root = { "LowerTorso", "Root" },
@@ -678,9 +706,9 @@ function CombatAnim.Play(character: Instance?, name: string, hold: number?, dura
 	end
 	local state = stateOf(character)
 	state.Anim = anim
-	state.Start = os.clock()
+	state.Start = now()
 	state.Stretch = if duration and duration > 0 then duration / anim.Duration else 1
-	state.HoldUntil = if hold and hold > 0 then os.clock() + hold else 0
+	state.HoldUntil = if hold and hold > 0 then now() + hold else 0
 end
 
 -- Ends whatever action is playing; the body eases back to normal.
@@ -825,7 +853,7 @@ local function locomotion(character: Model, state: State, dt: number, clock: num
 end
 
 local function apply(character: Model, state: State, dt: number)
-	local clock = os.clock()
+	local clock = now()
 	local action: { [string]: Vector3 } = {}
 	local spin = 0
 	local spinAxis = "X"

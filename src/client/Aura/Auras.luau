@@ -16,6 +16,7 @@ local Workspace = game:GetService("Workspace")
 
 local GemCatalog = require(ReplicatedStorage:WaitForChild("GemCatalog"))
 local Layers = require(script.Parent:WaitForChild("Layers"))
+local Toon = require(script.Parent.Parent:WaitForChild("Toon"))
 local Recipes = require(script.Parent:WaitForChild("Recipes"))
 
 local localPlayer = Players.LocalPlayer
@@ -98,6 +99,10 @@ function Auras.Build(gemId: string, root: BasePart, parent: Instance, groundOffs
 				warn(`[Auras] {gem.Id} {spec.Kind}: {update}`)
 			end
 		end
+	end
+	-- High-tier auras are inked like an anime frame (within the outline budget).
+	if tier >= 4 then
+		Toon.Outline(model, gem.Color, Toon.Priority.Aura, 1, model)
 	end
 	model.Parent = parent
 	return {
@@ -233,6 +238,9 @@ local function step()
 end
 
 function Auras.Start()
+	Layers.OnHighlight = function(highlight: Highlight)
+		Toon.Register(highlight, Toon.Priority.Aura)
+	end
 	folder = Instance.new("Folder")
 	folder.Name = "Auras"
 	folder.Parent = Workspace
