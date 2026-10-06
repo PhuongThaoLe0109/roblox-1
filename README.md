@@ -1,4 +1,4 @@
-# roblox-1 — Prism Shores (working title)
+# roblox-1 — Universal Gems
 
 An open-world PvP brawler: roll gems, wear their aura, and fight with the gem's own kit anywhere in the world
 (Sol's RNG meets an anime battlegrounds game, in a Steven-Universe-style crystal world).
@@ -10,6 +10,17 @@ Luau source laid out for [Rojo](https://rojo.space) (`rojo serve`, then connect 
 2. Wear a gem: it decides your **aura** and your **combat kit** (weapon, skills, transformation, domain).
 3. Step off the plaza and fight anyone, anywhere. There is no Play button.
 4. When you're defeated you **shatter** into your gem, then reform at the plaza a few seconds later.
+
+## Getting around (`src/shared/MovementConfig.luau`)
+
+- Everyone **runs** at full speed (30 studs/s); there is no sprint key. Beast forms run at their own speed × 1.65.
+- **Dash** (Q): a lunge with the arms swept back, gem-coloured afterimages and a braking stop. One more in the air.
+- **Double jump**: a forward flip over a ring of light. Rising, falling and landing each have their own body pose.
+- **Flying broom** (B): a slim wooden broom with a crystal tip and a gem-tinted bristle bundle that streaks light.
+  You ride it astride, facing where it flies, hands on the shaft. W flies along the camera, S brakes / backs off,
+  A / D glide, Space / Ctrl climb / dive; it banks into turns and tips with the climb. Not in combat or beast form;
+  using a skill, getting hit, stunned or transforming knocks you off, and you can't remount for 2.5 s. The server
+  checks the flight speed and a height limit (220 studs above the ground) in `MovementGuard`.
 
 ## Combat (`src/shared/GemKits.luau`, `src/server/Modules/Combat`)
 
@@ -26,19 +37,30 @@ Every gem has its own kit, and it grows with rarity:
 
 - **Melee weapons**: Crystal Blade, Prism Greatsword, Twin Facets (daggers), Geode Fists, Spire Lance (spear), Moon Scythe,
   Monolith Hammer, Ribbon Whip, Gale Fans. Each has its own combo length, reach, arc and finisher. Weapons are oversized
-  (×1.45) with wide arcs, and every swing plays its own full-body procedural animation (wind-up, strike, follow-through).
+  (×1.45) with wide arcs, and every combo hit plays its own full-body procedural animation: a slow wind-up, a strike
+  that snaps through, a follow-through past the pose and a settle. Finishers are the heaviest (leaping, whirling, or
+  crashing down), and the slash trail starts exactly as the strike does.
 - **Skill archetypes** (24): volleys, piercing lances, homing orbs, boomerang discs, crystal rain, meteors, launchers, rushes,
   cyclones, quakes, flurries, novas, spire lines, vortexes, rays, prisons, chain lightning, blinks, aegis shields, blooms,
   frost fields (slow), shackles (root), hooks (pull), hexes (take more damage). Each gem gets a mix picked from its
   element (the same element as its aura), named after it ("Umbral Vortex", "Glacial Prison", ...). Cooldowns are short
   (`GemKits.CooldownScale` = 0.5) and areas are wide (`GemKits.AreaScale` = 1.35); big hits detonate with a white-hot
-  core, a shockwave dome, double floor rings, a scorch mark, embers and screen shake. Every cast has a body pose.
+  core, a shockwave dome, double floor rings, a scorch mark, embers and screen shake. Every archetype has its own body
+  motion (a javelin throw for Lance, a discus throw for Boomerang, both hands to the sky for Rain, a hand raised and
+  dragged down for Meteor, a kneeling slam for Trap, a whirl for Spin, a gather-and-burst for Nova, ...). Skills with
+  a charge (Nova, Meteor, Beam, Domain, Transformation) hold a trembling charge pose while light is drawn into the body
+  and the aura surges; a stun cancels the charge cleanly.
 - **Beasts**: Prism Golem, Pyre Wyrm, Glacier Stag, Umbral Maw, Thunder Roc, Dream Moth, Solar Lion, Star Koi. While
   transformed your strikes become the beast's own attack (the lion swipes and pounces, the golem smashes, the stag sweeps
   its antlers, the roc buffets, ...), you take less damage and move at the beast's speed. Beasts are skeletal rigs of rounded crystal bodies
   (`BeastModels`), animated on the client with gaits that follow their speed, breathing, a roar and attack poses.
+  Transforming plays a short **cutscene** for the caster (letterbox, title, close-up, orbit as the body cracks into
+  crystal, a flash as the beast forms and roars, slow-motion effects); the caster can't be hit or act during it
+  (`CombatConfig.Cutscene`), and everyone else sees it happen in the world. When the form ends the beast bursts apart
+  and you reform crouched in a column of light. Cutscenes can be switched off in the skills guide (H).
 - **Domains**: 8 dimensions (one per element, e.g. "Event Horizon", "Crucible of Embers"). Walls of light, a tinted sky, and
   foes inside are slowed, take damage every half second and are pushed back if they try to leave; your cooldowns run faster.
+  Opening one plays a 1.5 s intro for the caster: the camera rises to watch the dome come down under the domain's name.
 - Damage is close between rarities (power ×1.00 to ×1.20): rarer gems win by having more tools.
 - Block (F) from the front with a guard meter, dash (Q) with i-frames, stuns, knockback, combo counter, spawn protection.
 - Server-authoritative: hit detection, cooldowns, combos and kit checks happen on the server (`ActionService`), with a request
@@ -55,7 +77,33 @@ Offline checks:
 ```sh
 tools/kit-check.sh path/to/luau      # all 100 kits: skill counts, names, keys, descriptions
 tools/combat-check.sh path/to/luau   # builds the 8 beasts and 9 weapons against the Roblox stub, then runs kit-check
+tools/anim-check.sh path/to/luau     # every animation on R15 + R6 dummies, holds, stuns, movement layers, the broom
+tools/fx-check.sh                    # every server effect has a client handler, every archetype a motion, valid font weights
 ```
+
+## Look: cel-shaded anime (`src/client/Toon.luau`)
+
+Roblox has no custom shaders, so the "3D anime with a 2D finish" look is faked:
+
+- **Ink outlines**: Highlights in a dark ink of the gem colour around weapons, beasts, brooms, tier 4-5 auras,
+  projectiles, crystal spikes, the meteor and explosion domes. Roblox renders at most 31 Highlights, so every one goes
+  through `Toon`: 28 slots, by priority (hit flashes, beasts, effects, gear, auras), then nearest to the camera; nothing
+  past 260 studs.
+- **Banded colour**: slashes are a dark ink outline, the saturated gem colour and a white-hot core (thick in the middle,
+  thin at both ends) and fade in hard steps; weapon, broom and projectile trails use hard colour / transparency bands;
+  big shock rings carry an ink ring behind them.
+- **Impact**: heavy blows you land or take, and explosions next to you, add a two-frame impact flash (white, then
+  dark), screen-space speed lines and a ~50 ms hit-stop (effects and body motion freeze); angular crystal wedges fly
+  off every hit.
+
+## Performance & phones
+
+- Auras past 300 studs are unparented; combat effects past 380 studs are skipped (their body motion still plays, and
+  anything involving you always plays); characters past 320 studs aren't animated; ink outlines past 260 studs are off.
+- Touch devices get lighter effects (no bloom layer on slashes, half the charge motes).
+- On touch screens the broom / dash column sits above Roblox's jump button, the text hint is dropped, the combo
+  counter moves to the left and the skill bar column shifts right just enough to clear the Roll panel, so nothing
+  overlaps from 640×360 phones up to tablets.
 
 ## Gems & rolling
 
@@ -110,7 +158,7 @@ src/
     GemCatalog       100 gems: name, "1 in N" odds, aura colours
     GemKits          every gem's combat kit: melee style, skills, beast, domain
     CombatConfig     general combat numbers + status attribute names
-    MovementConfig   sprint, dash, double jump, hoverboard
+    MovementConfig   run speed, dash, double jump, flying broom
     Signal           leak-safe event object
   server/          -> ServerScriptService
     Main.server      entry point
@@ -119,7 +167,7 @@ src/
       RollConfig     roll cooldown, announcements, hidden pity tiers (server-only)
       RollEngine     pure roll + pity logic (simulated offline by tools/roll-sim.sh)
       RollService    RequestRoll / RequestEquip handling, announcements
-      MovementService hoverboard + movement effect relay
+      MovementService flying broom (model, rules, knock-off) + movement effect relay
       AdminService   founder chat commands (?admin)
       Remotes        ReplicatedStorage.Remotes
       Combat/
@@ -137,13 +185,16 @@ src/
   client/          -> StarterPlayer.StarterPlayerScripts
     Main.client      entry point (ScreenGui + responsive UIScale)
     MapFX            client-side animation of the world's decoration
+    Toon             cel-shaded look: ink outlines (Highlight budget, nearest first), impact frames, speed lines, hit-stop
     ClientData       local mirror of inventory / equipped gem / rolls
-    Movement/        MovementController (sprint, dash, double jump, board, combat speeds), MovementFX
+    Movement/        MovementController (run, dash, double jump, broom flight, combat speeds), MovementFX
     Combat/
       CombatController inputs, aim, cooldowns, melee prediction, self-moving skills
       CombatFX       every combat effect (swings, projectiles, areas, domains, transformations, shattering)
       BeastFX        beast locomotion (trot / gallop / stride / flap / swim), idle, roar and attacks
-      CombatAnim     procedural R15 animations: every M1 combo step, skill casts, block guard
+      CombatAnim     procedural animation (R15, R6 fallback): M1 combos, skill motions, charges, dash, flip, fall,
+                     landing, broom seat, block guard
+      Cutscene       ultimate intros (transformation, domain): camera, letterbox, title, slow motion
       Overheads      gem title, rarity, name, HP and status over every fighter
     Aura/
       Auras          draws every player's aura, Inventory "try on" preview
@@ -155,7 +206,7 @@ src/
       LobbyHud       title, stats, ROLL + cooldown, Auto / Fast, Inventory
       CombatHud      health, skill bar, combo, kill feed, status, shattered screen
       SkillGuide     the SKILLS / H panel explaining your gem's kit
-      MovementHud    board button, sprint and dash pills
+      MovementHud    broom button, descend (while flying) and dash pills
       RollReveal     spinning reel + reveal (rays, flash, gradient lettering, NEW!/×count)
       Inventory      100-gem collection grid, filters, detail pane, equip
       Announcements  server cards, rainbow banner for the rarest pulls, toasts
@@ -216,7 +267,7 @@ tools/render-map.py parts.txt preview.png --cam 0,105,600 --look 0,70,-20   # z-
 | `GetProfile` | client → server | `() -> { Inventory, Equipped, Rolls }` |
 | `InventorySync` | server → client | `("Full", snapshot)`, `("Gem", id, count)`, `("Equipped", id)` |
 | `Announce` | server → all | `(kind, playerName, gemId)` with kind `"Server"` or `"Banner"` |
-| `SetHoverboard` | client → server | `(on: boolean)`: server builds/removes the board, sets character attribute `Hoverboard` |
+| `SetBroom` | client → server | `(on: boolean)`: server builds/removes the broom, sets character attribute `Broom` |
 | `MovementFX` | client → server → others | `("Dash" \| "DoubleJump", direction?)`, relayed as `(character, kind, direction?)` |
 | `CombatAction` | client → server | `(action, aimDirection, aimPoint)`: action `"M1"`, `"Z"`..`"V"`, `"G"`, `"T"`, `"Block"`, `"Unblock"`, `"Dash"` |
 | `CombatState` | server → client | `("Cooldown", slot, readyAt, combo?)`, `("Rejected", slot, reason)`, `("Reset")` |
@@ -234,10 +285,11 @@ beast, domain, shattered, ...), all as server-time timestamps where they expire.
 |---|---|---|
 | Roll | R / ROLL button | X |
 | Inventory | I | Y |
-| Sprint (hold) | Ctrl / SPRINT button | L3 (toggle) |
 | Dash (one more in the air) | Q / DASH button | B |
 | Double jump | Space in the air | A in the air |
-| Hoverboard (not while in combat) | B / BOARD button | D-pad up |
+| Flying broom (not while in combat) | B / BROOM button | D-pad up |
+| Fly: along the camera / brake / glide | W / S / A D (touch: joystick) | left stick |
+| Fly: climb / dive | Space / Ctrl (touch: Jump / hold DESCEND) | A / hold L3 |
 | Attack (hold for combo) | Left mouse / ATTACK slot | R2 |
 | Skills | Z X C V | R1, L1, D-pad left, D-pad right |
 | Transformation | G | D-pad down |

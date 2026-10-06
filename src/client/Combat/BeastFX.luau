@@ -28,11 +28,15 @@ type Beast = {
 	Born: number,
 	Attack: { Combo: number, Start: number, Duration: number }?,
 	Seed: number,
+	Parts: { BasePart }, -- the biggest visible parts (for the shatter)
+	Snapshot: { { CFrame: CFrame, Size: Vector3, Color: Color3, Material: Enum.Material, Transparency: number } }?,
+	SnapshotAt: number,
 }
 
 local beasts: { [Model]: Beast } = {}
 
 local RUN_SPEED = 30
+local MAX_SHARDS = 40 -- pieces thrown out when a beast form ends
 
 local function smooth(e0: number, e1: number, x: number): number
 	local t = math.clamp((x - e0) / (e1 - e0), 0, 1)
@@ -56,6 +60,18 @@ local function track(model: Instance)
 	end
 	local character = model.Parent
 	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local parts = {}
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") and d.Transparency < 0.9 then
+			table.insert(parts, d)
+		end
+	end
+	table.sort(parts, function(a, b)
+		return a.Size.X * a.Size.Y * a.Size.Z > b.Size.X * b.Size.Y * b.Size.Z
+	end)
+	for i = #parts, MAX_SHARDS + 1, -1 do
+		parts[i] = nil
+	end
 	beasts[model] = {
 		Model = model,
 		Kind = model:GetAttribute("Kind") or "",
@@ -67,7 +83,85 @@ local function track(model: Instance)
 		Born = os.clock(),
 		Attack = nil,
 		Seed = math.random() * 10,
+		Parts = parts,
+		Snapshot = nil,
+		SnapshotAt = 0,
 	}
+end
+
+-- When the form ends, the beast bursts apart: copies of its biggest pieces
+-- fly outward spinning, shrink and fade (from the last snapshot, since the
+-- model itself is already gone).
+local fragments: Folder? = nil
+local function shatter(b: Beast)
+	local snapshot = b.Snapshot
+	if not snapshot or #snapshot == 0 then
+		return
+	end
+	if not fragments or not fragments.Parent then
+		local f = Instance.new("Folder")
+		f.Name = "BeastShatter"
+		f.Parent = workspace
+		fragments = f
+	end
+	local center = Vector3.zero
+	for _, item in snapshot do
+		center += item.CFrame.Position
+	end
+	center /= #snapshot
+	local pieces = {}
+	for _, item in snapshot do
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.CastShadow = false
+		p.Size = item.Size
+		p.CFrame = item.CFrame
+		p.Color = item.Color
+		p.Material = item.Material
+		p.Transparency = item.Transparency
+		p.Parent = fragments
+		local out = item.CFrame.Position - center
+		out = if out.Magnitude > 1e-3 then out.Unit else Vector3.yAxis
+		table.insert(pieces, {
+			Part = p,
+			From = item.CFrame,
+			Size = item.Size,
+			Base = item.Transparency,
+			Velocity = out * (16 + math.random() * 22) + Vector3.new(0, 10 + math.random() * 14, 0),
+			Spin = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 14,
+		})
+	end
+	local started = os.clock()
+	local life = 0.85
+	local connection
+	connection = RunService.Heartbeat:Connect(function()
+		local t = os.clock() - started
+		local a = math.min(1, t / life)
+		for _, piece in pieces do
+			local pos = piece.From.Position + piece.Velocity * t + Vector3.new(0, -30 * t * t, 0)
+			local rot = CFrame.Angles(piece.Spin.X * t, piece.Spin.Y * t, piece.Spin.Z * t)
+			piece.Part.CFrame = CFrame.new(pos) * (piece.From - piece.From.Position) * rot
+			piece.Part.Size = piece.Size * (1 - 0.7 * a)
+			piece.Part.Transparency = piece.Base + (1 - piece.Base) * a ^ 1.5
+		end
+		if a >= 1 then
+			connection:Disconnect()
+			for _, piece in pieces do
+				piece.Part:Destroy()
+			end
+		end
+	end)
+end
+
+local function vanish(model: Model)
+	local b = beasts[model]
+	if b then
+		beasts[model] = nil
+		shatter(b)
+	end
 end
 
 -- Pose accumulator: degrees per bone (x = pitch, y = yaw, z = roll).
@@ -408,8 +502,19 @@ local function step(dt: number)
 	local now = os.clock()
 	for model, b in beasts do
 		if model.Parent == nil then
-			beasts[model] = nil
+			vanish(model)
 			continue
+		end
+		-- Keep a light snapshot of the body for the shatter.
+		if now >= b.SnapshotAt then
+			b.SnapshotAt = now + 0.2
+			local snapshot = {}
+			for _, p in b.Parts do
+				if p.Parent then
+					table.insert(snapshot, { CFrame = p.CFrame, Size = p.Size, Color = p.Color, Material = p.Material, Transparency = p.Transparency })
+				end
+			end
+			b.Snapshot = snapshot
 		end
 		local speed = 0
 		if b.Root and b.Root.Parent then
@@ -459,7 +564,9 @@ function BeastFX.Start(combatFX: any?)
 		task.defer(track, model)
 	end)
 	CollectionService:GetInstanceRemovedSignal("BeastForm"):Connect(function(model)
-		beasts[model :: Model] = nil
+		if model:IsA("Model") then
+			vanish(model)
+		end
 	end)
 	for _, model in CollectionService:GetTagged("BeastForm") do
 		track(model)

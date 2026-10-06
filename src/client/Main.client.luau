@@ -12,6 +12,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 local Auras = require(script.Parent:WaitForChild("Aura"):WaitForChild("Auras"))
 local ClientData = require(script.Parent:WaitForChild("ClientData"))
 local MapFX = require(script.Parent:WaitForChild("MapFX"))
+local Toon = require(script.Parent:WaitForChild("Toon"))
 local MovementController = require(script.Parent:WaitForChild("Movement"):WaitForChild("MovementController"))
 local CombatFolder = script.Parent:WaitForChild("Combat")
 local BeastFX = require(CombatFolder:WaitForChild("BeastFX"))
@@ -61,6 +62,7 @@ local context = {
 	end,
 }
 
+Toon.Start()
 MapFX.Start()
 MovementController.Start()
 ClientData.Start()

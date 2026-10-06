@@ -244,5 +244,14 @@ game = setmetatable({}, { __index = function(_, k)
 	return nil
 end })
 workspace = service("Workspace")
+-- Raycasts hit flat ground unless Stub.Airborne is set.
+Stub.Airborne = false
+Stub.Clock = 0
+RaycastParams = { new = function() return {} end }
+rawset(workspace, "Raycast", function(_, origin, direction)
+	if Stub.Airborne then return nil end
+	return { Position = origin + direction, Instance = workspace, Normal = Vector3.new(0, 1, 0) }
+end)
+rawset(workspace, "GetServerTimeNow", function() return Stub.Clock end)
 
 return Stub

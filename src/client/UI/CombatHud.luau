@@ -11,6 +11,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local CombatConfig = require(ReplicatedStorage:WaitForChild("CombatConfig"))
@@ -590,6 +591,44 @@ function CombatHud.Init(screen: ScreenGui, context)
 			deathTimer.Text = if left > 0 then string.format("Reforming in %.1f…", left) else "Reforming…"
 		end
 	end)
+	----------------------------------------------------------------------------
+	-- Small touch screens: keep everything apart. The bottom-centre column
+	-- (skill bar, health, guard, status) moves right just enough to clear the
+	-- Roll panel on the left, and the combo counter moves to the left side,
+	-- since the right is taken by the kill feed, the broom / dash column and
+	-- the jump button.
+	----------------------------------------------------------------------------
+	local bottomCentre: { [GuiObject]: UDim2 } = {}
+	for _, child in root:GetChildren() do
+		if child:IsA("GuiObject") and child.Position.X.Scale == 0.5 and child.Position.Y.Scale == 1 then
+			bottomCentre[child] = child.Position
+		end
+	end
+	local comboBase = { Anchor = comboHolder.AnchorPoint, Position = comboHolder.Position }
+	local function layout()
+		local camera = Workspace.CurrentCamera
+		local size = if camera then camera.ViewportSize else Vector2.new(1366, 768)
+		local touch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		local uiScale = math.clamp(math.min(size.X / 1366, size.Y / 768), 0.55, 1.3)
+		local width = size.X / uiScale
+		-- The Roll panel ends 368 px in; the skill bar is 8 * (SLOT + 8) wide.
+		local shift = if touch then math.max(0, 376 - (width / 2 - 4 * (SLOT + 8))) else 0
+		for frame, base in bottomCentre do
+			frame.Position = UDim2.new(base.X.Scale, base.X.Offset + shift, base.Y.Scale, base.Y.Offset)
+		end
+		if touch then
+			comboHolder.AnchorPoint = Vector2.new(0, 0.5)
+			comboHolder.Position = UDim2.new(0, 40, 0.45, 0)
+		else
+			comboHolder.AnchorPoint = comboBase.Anchor
+			comboHolder.Position = comboBase.Position
+		end
+	end
+	layout()
+	if Workspace.CurrentCamera then
+		Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layout)
+	end
+	UserInputService.LastInputTypeChanged:Connect(layout)
 end
 
 return CombatHud

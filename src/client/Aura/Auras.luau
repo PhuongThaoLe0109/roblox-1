@@ -16,6 +16,7 @@ local Workspace = game:GetService("Workspace")
 
 local GemCatalog = require(ReplicatedStorage:WaitForChild("GemCatalog"))
 local Layers = require(script.Parent:WaitForChild("Layers"))
+local Toon = require(script.Parent.Parent:WaitForChild("Toon"))
 local Recipes = require(script.Parent:WaitForChild("Recipes"))
 
 local localPlayer = Players.LocalPlayer
@@ -31,6 +32,7 @@ type Aura = {
 	Updates: { Layers.Update },
 	Started: number,
 	Visible: boolean,
+	Warp: number, -- extra seconds run ahead while surging (faster, wilder motion)
 }
 
 local folder: Folder
@@ -98,6 +100,10 @@ function Auras.Build(gemId: string, root: BasePart, parent: Instance, groundOffs
 			end
 		end
 	end
+	-- High-tier auras are inked like an anime frame (within the outline budget).
+	if tier >= 4 then
+		Toon.Outline(model, gem.Color, Toon.Priority.Aura, 1, model)
+	end
 	model.Parent = parent
 	return {
 		GemId = gem.Id,
@@ -105,6 +111,7 @@ function Auras.Build(gemId: string, root: BasePart, parent: Instance, groundOffs
 		Root = root,
 		Updates = updates,
 		Started = os.clock() - math.random() * 10,
+		Warp = 0,
 		Visible = true,
 	}
 end
@@ -179,10 +186,21 @@ function Auras.SetPreview(gemId: string?)
 	refresh(localPlayer)
 end
 
+-- Charging characters: their aura runs faster and wilder until `Until`.
+local surges: { [Model]: { Until: number, Strength: number } } = setmetatable({}, { __mode = "k" }) :: any
+
+-- Makes a character's aura surge for `seconds` (charging up an attack).
+function Auras.Surge(character: Model, seconds: number, strength: number?)
+	surges[character] = { Until = os.clock() + seconds, Strength = strength or 1 }
+end
+
+local lastStep = os.clock()
 local function step()
 	local camera = Workspace.CurrentCamera
 	local eye = camera and camera.CFrame.Position or Vector3.zero
 	local now = os.clock()
+	local dt = math.min(0.1, now - lastStep)
+	lastStep = now
 	table.clear(moveParts)
 	table.clear(moveFrames)
 	for player, aura in auras do
@@ -197,7 +215,17 @@ local function step()
 			aura.Model.Parent = if near then folder else nil
 		end
 		if near then
-			local t = now - aura.Started
+			local character = player.Character
+			local surge = character and surges[character]
+			if surge then
+				if now < surge.Until then
+					-- Ramps up over the charge: up to ~2.5x speed at full strength.
+					aura.Warp += dt * 1.5 * surge.Strength
+				elseif character then
+					surges[character] = nil
+				end
+			end
+			local t = now - aura.Started + aura.Warp
 			local cf = root.CFrame
 			for _, update in aura.Updates do
 				update(t, cf)
@@ -210,6 +238,9 @@ local function step()
 end
 
 function Auras.Start()
+	Layers.OnHighlight = function(highlight: Highlight)
+		Toon.Register(highlight, Toon.Priority.Aura)
+	end
 	folder = Instance.new("Folder")
 	folder.Name = "Auras"
 	folder.Parent = Workspace

@@ -34,6 +34,7 @@ local function fx(ctx: Context, kind: string, params: { [string]: any })
 	params.Color = color
 	params.Accent = accent
 	params.Element = ctx.Kit.Element
+	params.Archetype = ctx.Skill.Archetype -- picks the caster's body motion
 	CombatService.FX(kind, params)
 end
 
@@ -501,7 +502,8 @@ function Skills.Domain(ctx: Context)
 	local character = ctx.Character
 	character:SetAttribute("DomainHaste", s.Haste)
 	CombatService.Extend(character, STATUS.DomainUntil, s.Duration + 1)
-	CombatService.Extend(character, STATUS.InvulnerableUntil, 1)
+	-- The domain intro: untouchable through its cutscene.
+	CombatService.Extend(character, STATUS.InvulnerableUntil, CombatConfig.Cutscene.Domain)
 	fx(ctx, "Domain", { Center = center, Radius = s.Radius, Duration = s.Duration, Name = s.DomainName })
 	task.wait(1) -- the dimension unfolds
 	local ends = os.clock() + s.Duration

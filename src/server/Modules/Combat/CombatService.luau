@@ -400,6 +400,7 @@ function CombatService.Hit(attacker: Player, target: Target, amount: number, opt
 		Color = color,
 		Accent = accent,
 		Heavy = opts.Knockback ~= nil and opts.Knockback.Magnitude > 30,
+		Attacker = if attacker then attacker.Character else nil, -- for the attacker's impact frame
 	})
 	CombatService.Damaged:Fire(attacker, target, dealt)
 	return dealt

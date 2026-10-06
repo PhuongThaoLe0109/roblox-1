@@ -59,6 +59,14 @@ CombatConfig.Dash = {
 -- Status attributes (on characters)
 --------------------------------------------------------------------------------
 
+-- Ultimate intros. The caster can't be hurt (or act) for the whole cutscene;
+-- the beast takes shape BeastAt seconds into it.
+CombatConfig.Cutscene = {
+	Transform = 2.6,
+	BeastAt = 1.1,
+	Domain = 1.5,
+}
+
 CombatConfig.Status = {
 	StunnedUntil = "StunnedUntil",
 	InvulnerableUntil = "InvulnerableUntil", -- i-frames and spawn protection
@@ -93,6 +101,7 @@ table.freeze(CombatConfig.SafeZone)
 table.freeze(CombatConfig.Speeds)
 table.freeze(CombatConfig.Block)
 table.freeze(CombatConfig.Dash)
+table.freeze(CombatConfig.Cutscene)
 table.freeze(CombatConfig.Status)
 table.freeze(CombatConfig.PlayerAttributes)
 table.freeze(CombatConfig)

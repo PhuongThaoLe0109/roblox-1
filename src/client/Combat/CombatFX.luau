@@ -5,6 +5,12 @@
 -- transparency sequences give the show's soft gradients), PointLights and
 -- Highlights. Every effect uses the caster's gem colours.
 --
+-- The look is cel-shaded anime: effects are built in bands (a white-hot core,
+-- the gem colour, then a dark ink edge, Toon.Ink), slashes and shock rings
+-- carry an ink outline behind their glow and fade in hard steps, big pieces
+-- get Highlight ink outlines (through Toon's budget), and heavy blows that
+-- involve you add an impact frame, speed lines and a short hit-stop.
+--
 -- The local player's own swings / casts are drawn immediately by
 -- CombatController (CombatFX.Play) and the server echo is skipped, so attacks
 -- feel instant.
@@ -13,45 +19,69 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
+local CombatConfig = require(ReplicatedStorage:WaitForChild("CombatConfig"))
 local Theme = require(script.Parent.Parent:WaitForChild("UI"):WaitForChild("Theme"))
+local Auras = require(script.Parent.Parent:WaitForChild("Aura"):WaitForChild("Auras"))
 local CombatAnim = require(script.Parent:WaitForChild("CombatAnim"))
+local Cutscene = require(script.Parent:WaitForChild("Cutscene"))
+local Toon = require(script.Parent.Parent:WaitForChild("Toon"))
 
 local player = Players.LocalPlayer
+
+-- Phones and tablets get lighter effects (no soft bloom layer on slashes,
+-- fewer charge motes) so crowded fights stay smooth.
+local LITE = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
 local CombatFX = {}
 
 -- Set by BeastFX: plays a beast's maul attack (character, combo).
 CombatFX.OnBeastAttack = nil :: ((Instance, number) -> ())?
 
--- The body motion that goes with each effect (played on its caster).
-local ANIM_FOR: { [string]: string } = {
-	Cast = "Cast",
+-- The body motion that goes with each effect (played on its caster). Casts
+-- use their skill's own archetype motion (Volley, Lance, Orbs, Boomerang).
+local MOTION: { [string]: string } = {
 	Launcher = "Launcher",
 	Rush = "Rush",
-	Spin = "Spin",
 	SlamLeap = "SlamLeap",
 	Flurry = "Flurry",
-	NovaCharge = "NovaCharge",
 	Nova = "NovaRelease",
-	Beam = "Beam",
-	Rain = "SkyCall",
-	Meteor = "SkyCall",
-	Bloom = "SkyCall",
-	Vortex = "Push",
-	Chain = "Push",
-	Bind = "Push",
-	Trap = "Ground",
-	Frostbite = "Ground",
-	Curse = "Ground",
-	Pillars = "Ground",
+	Rain = "Rain",
+	Bloom = "Bloom",
+	Vortex = "Vortex",
+	Chain = "Chain",
+	Bind = "Bind",
+	Trap = "Trap",
+	Frostbite = "Frostbite",
+	Curse = "Curse",
+	Pillars = "Pillars",
 	Grab = "Grab",
 	Blink = "Blink",
-	Shield = "Guard",
+	Shield = "Shield",
 	Domain = "Domain",
 	Transform = "Transform",
+	TransformEnd = "Reform",
 }
+
+-- Motion name, how long to hold its charge, and a duration to stretch it to.
+local function motionFor(kind: string, params: { [string]: any }): (string?, number?, number?)
+	if kind == "Cast" then
+		local archetype = params.Archetype
+		return if type(archetype) == "string" and CombatAnim.Has(archetype) then archetype else "Cast"
+	elseif kind == "NovaCharge" then
+		return "NovaCharge", params.Duration or 0.55
+	elseif kind == "Meteor" then
+		-- Hand held to the sky until the star is about to land, then dragged down.
+		return "Meteor", math.max(0, (params.Delay or 1) - 0.56)
+	elseif kind == "Beam" then
+		return "Beam", math.max(0, (params.Duration or 1.2) - 0.42)
+	elseif kind == "Spin" then
+		return "Spin", nil, params.Duration
+	end
+	return MOTION[kind]
+end
 
 local WHITE = Color3.new(1, 1, 1)
 
@@ -110,14 +140,19 @@ local function attachment(position: Vector3, parent: Instance?): Attachment
 end
 
 -- Runs step(alpha, elapsed) every frame for `duration`, then cleanup().
-local function run(duration: number, step: (number, number) -> (), cleanup: (() -> ())?)
-	local started = os.clock()
+-- Animates an effect over `duration` seconds of effect time (slowed down
+-- during ultimate cutscenes). `step` may return true to end early.
+local frozenUntil = 0 -- hit-stop: effects hold still until then
+local function run(duration: number, step: (number, number) -> boolean?, cleanup: (() -> ())?)
+	local elapsed = 0
 	local connection
-	connection = RunService.Heartbeat:Connect(function()
-		local elapsed = os.clock() - started
+	connection = RunService.Heartbeat:Connect(function(dt)
+		if os.clock() >= frozenUntil then
+			elapsed += dt * Cutscene.TimeScale
+		end
 		local alpha = math.min(1, elapsed / duration)
 		local ok, err = pcall(step, alpha, elapsed)
-		if not ok or alpha >= 1 then
+		if not ok or alpha >= 1 or err == true then
 			connection:Disconnect()
 			if cleanup then
 				cleanup()
@@ -215,8 +250,11 @@ end
 
 -- A crescent slash sweeping from angle a0 to a1 (degrees) in the XZ plane of
 -- `frame` (forward = -Z), rolled about the forward axis by `roll` degrees.
+-- Drawn like an anime smear: a dark ink outline, the saturated gem colour, a
+-- white-hot core and a faint bloom; thick in the middle, thin at the ends,
+-- fading out in hard steps rather than a soft blur.
 local function slash(frame: CFrame, radius: number, a0: number, a1: number, roll: number, width: number, color: Color3, accent: Color3, duration: number)
-	local n = 16
+	local n = 12
 	local plane = frame * CFrame.Angles(0, 0, math.rad(roll))
 	local function pointsAt(scale: number): { Vector3 }
 		local list = {}
@@ -231,46 +269,110 @@ local function slash(frame: CFrame, radius: number, a0: number, a1: number, roll
 		for i = 0, n do
 			local t = i / n
 			-- Crescent: thin tail, thick just behind the head, sharp tip.
-			list[i + 1] = w * (0.08 + 0.92 * math.sin(math.pi * math.min(1, t * 0.85 + 0.08)) * t ^ 0.6)
+			list[i + 1] = w * (0.06 + 0.94 * math.sin(math.pi * math.min(1, t * 0.85 + 0.08)) * t ^ 0.6)
 		end
 		return list
 	end
-	local colorsCore, colorsGlow = {}, {}
+	local inkColor = Toon.Ink(color)
+	local colorsBody, colorsCore, colorsGlow, colorsInk = {}, {}, {}, {}
 	for i = 0, n do
 		local t = 1 - i / n
-		colorsCore[i + 1] = grad(color, accent, t * 0.8)
+		colorsBody[i + 1] = grad(color, accent, t * 0.8)
+		colorsCore[i + 1] = lerp(WHITE, Toon.Shade(color, 0.6), t * 0.5)
 		colorsGlow[i + 1] = grad(color, accent, 0.3 + t * 0.7)
+		colorsInk[i + 1] = inkColor
 	end
-	local glow = ribbon(pointsAt(1), widthsOf(width * 2.3), colorsGlow)
-	local core = ribbon(pointsAt(1), widthsOf(width), colorsCore)
-	local sweep = duration * 0.32
+	local start = pointsAt(1)
+	local glow = if LITE then nil else ribbon(start, widthsOf(width * 2.2), colorsGlow)
+	local ink = ribbon(start, widthsOf(width * 1.4), colorsInk)
+	local body = ribbon(start, widthsOf(width), colorsBody)
+	local core = ribbon(start, widthsOf(width * 0.42), colorsCore)
+	for _, beam in ink.Beams do
+		beam.LightEmission = 0
+		beam.ZOffset = -0.2
+	end
+	for _, beam in body.Beams do
+		beam.LightEmission = 0.45
+	end
+	for _, beam in core.Beams do
+		beam.ZOffset = 0.2
+	end
+	local layers: { { any } } = { { ink, 0.05 }, { body, 0 }, { core, 0 } }
+	if glow then
+		table.insert(layers, 1, { glow, 0.78 })
+	end
+	local sweep = duration * 0.3
 	run(duration, function(_, elapsed)
 		local head = math.min(1, elapsed / sweep)
-		local scale = 1 + 0.18 * easeOut(math.min(1, elapsed / duration))
+		local scale = 1 + 0.16 * easeOut(math.min(1, elapsed / duration))
 		local points = pointsAt(scale)
-		ribbonMove(glow, points)
-		ribbonMove(core, points)
 		local fadeSpan = duration - sweep
-		local function fade(base: number)
-			return function(i: number): number
+		for _, layer in layers do
+			local r, base = layer[1], layer[2]
+			ribbonMove(r, points)
+			ribbonFade(r, function(i: number): number
 				local t = (i - 1) / n
 				if t > head + 1e-3 then
 					return 1
 				end
-				local since = elapsed - t * sweep
-				return base + (1 - base) * math.clamp(since / fadeSpan, 0, 1) ^ 1.5
-			end
+				-- Hard steps (anime frames) instead of a smooth fade.
+				local since = math.clamp((elapsed - t * sweep) / fadeSpan, 0, 1)
+				local stepped = math.floor(since * 4) / 4
+				return base + (1 - base) * stepped ^ 1.2
+			end)
 		end
-		ribbonFade(glow, fade(0.55))
-		ribbonFade(core, fade(0))
+		return nil
 	end, function()
-		ribbonDestroy(glow)
-		ribbonDestroy(core)
+		for _, layer in layers do
+			ribbonDestroy(layer[1])
+		end
 	end)
 end
 
--- A glowing ring in the XZ plane of `frame` growing from r0 to r1.
-local function ring(frame: CFrame, r0: number, r1: number, w0: number, w1: number, color: Color3, accent: Color3, duration: number, sides: number?, startTransparency: number?)
+-- Angular crystal fragments (wedges) tumbling out of `position`.
+local function shards(position: Vector3, color: Color3, accent: Color3, count: number, speed: number, size: number, life: number, bias: Vector3?)
+	for i = 1, count do
+		local dir = Vector3.new(math.random() - 0.5, math.random() * 0.8 - 0.1, math.random() - 0.5)
+		if bias then
+			dir += bias
+		end
+		dir = if dir.Magnitude > 1e-3 then dir.Unit else Vector3.yAxis
+		local s = size * (0.5 + math.random() * 0.8)
+		local wedge = Instance.new("WedgePart")
+		wedge.Anchored = true
+		wedge.CanCollide = false
+		wedge.CanQuery = false
+		wedge.CanTouch = false
+		wedge.CastShadow = false
+		wedge.Material = if i % 3 == 0 then Enum.Material.Neon else Enum.Material.Glass
+		wedge.Color = if i % 3 == 0 then WHITE elseif i % 2 == 0 then color else Toon.Shade(accent, -0.35)
+		wedge.Transparency = if wedge.Material == Enum.Material.Glass then 0.1 else 0
+		wedge.Size = Vector3.new(s * 0.4, s, s * 0.7)
+		wedge.CFrame = CFrame.new(position)
+		wedge.Parent = folder
+		local v = dir * speed * (0.6 + math.random() * 0.6)
+		local spin = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 16
+		local base = wedge.Transparency
+		run(life * (0.7 + math.random() * 0.5), function(alpha, elapsed)
+			local p = position + v * elapsed + Vector3.new(0, -28 * elapsed * elapsed, 0)
+			wedge.CFrame = CFrame.new(p) * CFrame.Angles(spin.X * elapsed, spin.Y * elapsed, spin.Z * elapsed)
+			wedge.Transparency = base + (1 - base) * alpha ^ 2
+			return nil
+		end, function()
+			wedge:Destroy()
+		end)
+	end
+end
+
+-- A heavy blow that involves you: impact frame, speed lines, hit-stop.
+local function impact(position: Vector3, color: Color3, strength: number)
+	Toon.ImpactFrame(strength)
+	Toon.SpeedLines(position, color, math.floor(14 + 8 * strength))
+	Toon.HitStop(0.05)
+end
+
+-- With `ink`, it is the dark outline band drawn behind a bright ring.
+local function ring(frame: CFrame, r0: number, r1: number, w0: number, w1: number, color: Color3, accent: Color3, duration: number, sides: number?, startTransparency: number?, ink: boolean?)
 	local n = sides or 28
 	local function pointsAt(radius: number): { Vector3 }
 		local list = {}
@@ -286,6 +388,14 @@ local function ring(frame: CFrame, r0: number, r1: number, w0: number, w1: numbe
 		widths[i + 1] = w0
 	end
 	local r = ribbon(pointsAt(r0), widths, colors)
+	if ink then
+		local dark = Toon.Ink(color)
+		for _, beam in r.Beams do
+			beam.Color = ColorSequence.new(dark)
+			beam.LightEmission = 0
+			beam.ZOffset = -0.2
+		end
+	end
 	local base = startTransparency or 0.05
 	run(duration, function(alpha)
 		local e = easeOut(alpha)
@@ -362,6 +472,14 @@ local function spikes(center: Vector3, count: number, radius: number, height: nu
 		return
 	end
 	task.delay(delay or 0, function()
+		-- One ink outline around the whole crown of spikes.
+		local group = Instance.new("Model")
+		group.Name = "Spikes"
+		group.Parent = folder
+		Toon.Outline(group, color, Toon.Priority.Effect, 1, group)
+		task.delay(life + 0.1, function()
+			group:Destroy()
+		end)
 		for i = 1, count do
 			local a = (i / count + math.random() * 0.04) * math.pi * 2
 			local h = height * (0.7 + math.random() * 0.5)
@@ -371,6 +489,8 @@ local function spikes(center: Vector3, count: number, radius: number, height: nu
 			local tilt = CFrame.fromAxisAngle(outward:Cross(Vector3.yAxis), -math.rad(18 + math.random() * 14))
 			local shell = part(Vector3.new(w, h, w), CFrame.new(), if i % 2 == 0 then color else accent, Enum.Material.Glass, 0.15)
 			local core = part(Vector3.new(w * 0.45, h * 0.92, w * 0.45), CFrame.new(), WHITE)
+			shell.Parent = group
+			core.Parent = group
 			local spin = CFrame.Angles(0, math.rad(45), 0)
 			local function place(rise: number)
 				local cf = CFrame.new(base) * tilt * CFrame.new(0, h / 2 - h * (1 - rise), 0) * spin
@@ -408,9 +528,11 @@ local function explosion(center: Vector3, radius: number, color: Color3, accent:
 	flash(center, WHITE, 1.5, radius * 0.55 * k, 0.16, 0.05)
 	flash(center, accent, 2, radius * 0.9, 0.3, 0.3)
 
-	-- Shockwave dome: a hollow glass sphere sweeping to the edge of the area.
+	-- Shockwave dome: a hollow glass sphere sweeping to the edge of the area,
+	-- inked around its rim.
 	local dome = part(Vector3.one, CFrame.new(ground), color, Enum.Material.Glass, 0.4)
 	dome.Shape = Enum.PartType.Ball
+	Toon.Outline(dome, color, Toon.Priority.Effect, 1, folder)
 	run(0.42, function(alpha)
 		local d = radius * 2.1 * easeOut(alpha)
 		dome.Size = Vector3.new(d, d * 0.55, d)
@@ -424,8 +546,15 @@ local function explosion(center: Vector3, radius: number, color: Color3, accent:
 	local floor = CFrame.new(ground + Vector3.new(0, 0.25, 0))
 	ring(floor, radius * 0.2, radius * 1.15, 1.2 * k, 0.15, WHITE, accent, 0.3, 44, 0)
 	task.delay(0.05, function()
+		ring(floor * CFrame.new(0, 0.05, 0), radius * 0.1, radius, 4.8 * k, 0.8, color, accent, 0.65, 44, 0.05, true)
 		ring(floor * CFrame.new(0, 0.1, 0), radius * 0.1, radius, 3.2 * k, 0.5, color, accent, 0.65, 44)
 	end)
+	shards(center, color, accent, math.floor(8 + 6 * k), 40, 1.6, 0.8, Vector3.new(0, 0.6, 0))
+	-- Felt up close: impact frame, speed lines, hit-stop.
+	local own = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if own and own:IsA("BasePart") and (own.Position - center).Magnitude < radius * 1.6 then
+		impact(center, color, math.min(1, 0.6 + 0.3 * k))
+	end
 
 	-- Scorch: a dark glossy disc that lingers and fades, so the hit leaves a mark.
 	local scorch = part(Vector3.new(0.15, 1, 1), CFrame.new(ground + Vector3.new(0, 0.08, 0)) * CFrame.Angles(0, 0, math.rad(90)), lerp(color, Color3.new(0.05, 0.03, 0.08), 0.7), Enum.Material.Glass, 0.25)
@@ -577,6 +706,7 @@ local function hitFlash(character: Instance, color: Color3)
 	highlight.DepthMode = Enum.HighlightDepthMode.Occluded
 	highlight.Adornee = character
 	highlight.Parent = folder
+	Toon.Register(highlight, Toon.Priority.Hit)
 	run(0.18, function(alpha)
 		highlight.FillTransparency = 0.25 + 0.75 * alpha
 		highlight.OutlineTransparency = alpha
@@ -707,29 +837,39 @@ function Effects.Swing(params)
 	local style = params.Style or "Blade"
 	local combo = params.Combo or 1
 	local finisher = combo == (params.Hits or 4)
+	-- The trail is drawn as the strike starts, so it follows the arm.
+	local strikeAt = 0.12
 	if style == "Maul" then
 		if CombatFX.OnBeastAttack then
 			CombatFX.OnBeastAttack(character, combo)
 		end
 	else
-		CombatAnim.Play(character, if CombatAnim.Has(style .. combo) then style .. combo else "Blade" .. ((combo - 1) % 4 + 1))
+		local motion = if CombatAnim.Has(style .. combo) then style .. combo else "Blade" .. ((combo - 1) % 4 + 1)
+		CombatAnim.Play(character, motion)
+		strikeAt = math.clamp(CombatAnim.StrikeTime(motion), 0.03, 0.3)
 	end
 	local frame = aimFrame(root, params.Direction, 0.5)
 	local color, accent = params.Color, params.Accent
 
 	-- Thrusts: spear and fists strike straight ahead.
 	if style == "Spear" or style == "Gauntlets" then
-		local reach = if style == "Spear" then 16 else 8
-		local side = if combo % 2 == 0 then -0.6 else 0.6
-		bladeTrail(character, 0.2, style == "Gauntlets" and combo % 2 == 0)
-		local from = frame:PointToWorldSpace(Vector3.new(side, 0.4, -1.5))
-		local to = frame:PointToWorldSpace(Vector3.new(side * 0.3, 0.4, -reach))
-		streak(from, to, if finisher then 2.6 else 1.4, color, accent, if finisher then 0.35 else 0.22)
-		ring(CFrame.lookAt(to, to + frame.LookVector) * CFrame.Angles(math.rad(90), 0, 0), 0.5, if finisher then 4 else 2.2, 0.5, 0.05, color, accent, 0.25, 18)
-		if finisher then
-			flash(to, WHITE, 1, 5, 0.2, 0.3)
-			burst(to, color, accent, 10, 30, 0.9, 0.35, frame.LookVector)
-		end
+		task.delay(strikeAt, function()
+			if not root.Parent then
+				return
+			end
+			local aim = aimFrame(root, params.Direction, 0.5)
+			local reach = if style == "Spear" then 16 else 8
+			local side = if combo % 2 == 0 then -0.6 else 0.6
+			bladeTrail(character, 0.2, style == "Gauntlets" and combo % 2 == 0)
+			local from = aim:PointToWorldSpace(Vector3.new(side, 0.4, -1.5))
+			local to = aim:PointToWorldSpace(Vector3.new(side * 0.3, 0.4, -reach))
+			streak(from, to, if finisher then 2.6 else 1.4, color, accent, if finisher then 0.35 else 0.22)
+			ring(CFrame.lookAt(to, to + aim.LookVector) * CFrame.Angles(math.rad(90), 0, 0), 0.5, if finisher then 4 else 2.2, 0.5, 0.05, color, accent, 0.25, 18)
+			if finisher then
+				flash(to, WHITE, 1, 5, 0.2, 0.3)
+				burst(to, color, accent, 10, 30, 0.9, 0.35, aim.LookVector)
+			end
+		end)
 		return
 	end
 
@@ -747,7 +887,7 @@ function Effects.Swing(params)
 		bladeTrail(character, duration * 0.8, true)
 	end
 	local center = if style == "Fans" then frame * CFrame.new(0, 0, -2.5) else frame
-	task.delay(0.04, function()
+	task.delay(strikeAt, function()
 		if style == "Maul" then
 			-- Three claw marks.
 			for k = -1, 1 do
@@ -841,6 +981,7 @@ function Effects.Projectile(params)
 
 	local parts, spinOf = projectileBody(params.Shape or "Shard", color, accent)
 	local core = parts[1]
+	Toon.Outline(parts[2] or core, color, Toon.Priority.Effect, 1, folder)
 	local pl = Instance.new("PointLight")
 	pl.Color = color
 	pl.Range = if params.Shape == "Lance" then 16 else 10
@@ -856,12 +997,23 @@ function Effects.Projectile(params)
 	trail.LightEmission = 1
 	trail.LightInfluence = 0
 	trail.FaceCamera = true
+	-- Banded like a cel-shaded smear: white-hot, the gem colour, the accent.
 	trail.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, WHITE),
-		ColorSequenceKeypoint.new(0.3, color),
+		ColorSequenceKeypoint.new(0.18, WHITE),
+		ColorSequenceKeypoint.new(0.2, color),
+		ColorSequenceKeypoint.new(0.6, color),
+		ColorSequenceKeypoint.new(0.62, accent),
 		ColorSequenceKeypoint.new(1, accent),
 	})
-	trail.Transparency = NumberSequence.new(0.1, 1)
+	trail.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.05),
+		NumberSequenceKeypoint.new(0.6, 0.05),
+		NumberSequenceKeypoint.new(0.62, 0.45),
+		NumberSequenceKeypoint.new(0.86, 0.45),
+		NumberSequenceKeypoint.new(0.88, 1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
 	trail.WidthScale = NumberSequence.new(1, 0.1)
 	trail.Parent = core
 
@@ -980,47 +1132,99 @@ function Effects.Dash(params)
 	end
 end
 
-local charging: { [Instance]: boolean } = {}
-
-function Effects.NovaCharge(params)
-	local character = params.Caster
+-- Charging up: light motes and speed lines drawn into the body, rings
+-- tightening at the feet, a growing glow at the chest, the aura surging and,
+-- for your own charge, the screen trembling. Everything stops the moment the
+-- caster is stunned, shattered or gone. `power` scales it (1 = a normal charge).
+local function gather(character: Instance?, duration: number, color: Color3, accent: Color3, power: number)
 	local root = rootOf(character)
-	if not root then
+	if not root or duration <= 0 then
 		return
 	end
-	local duration = params.Duration or 0.55
-	charging[character] = true
-	for i, height in { -2.4, 0, 2.4 } do
-		task.delay((i - 1) * 0.06, function()
-			if root.Parent then
-				ring(CFrame.new(root.Position + Vector3.new(0, height, 0)), 10, 1.4, 0.15, 0.7, params.Color, params.Accent, duration - (i - 1) * 0.06, 24, 0.4)
+	local model = character :: Model
+	local function interrupted(): boolean
+		if root.Parent == nil or model:GetAttribute("Shattered") == true then
+			return true
+		end
+		return (model:GetAttribute("StunnedUntil") or 0) > Workspace:GetServerTimeNow()
+	end
+	Auras.Surge(model, duration, power)
+	local chest = function(): Vector3
+		return root.Position + Vector3.new(0, 0.8, 0)
+	end
+	-- Motes and streaks rushing inward, spread over the charge.
+	local count = math.floor((10 + 12 * power) * (if LITE then 0.5 else 1))
+	for i = 1, count do
+		task.delay((i / count) * duration * 0.7, function()
+			if interrupted() then
+				return
+			end
+			local dir = Vector3.new(math.random() - 0.5, math.random() * 0.9 - 0.25, math.random() - 0.5)
+			dir = if dir.Magnitude > 1e-3 then dir.Unit else Vector3.yAxis
+			local distance = 6 + math.random() * 5 * power
+			local streakLine = i % 3 == 0
+			local size = if streakLine then Vector3.new(0.12, 0.12, 2.4) else Vector3.new(0.3, 0.3, 0.3)
+			local mote = part(size, CFrame.new(chest() + dir * distance), if i % 2 == 0 then color else accent)
+			local life = 0.35 + math.random() * 0.25
+			run(life, function(alpha)
+				if interrupted() then
+					return true
+				end
+				local e = alpha ^ 2
+				local p = chest() + dir * distance * (1 - e)
+				mote.CFrame = if streakLine then CFrame.lookAt(p, chest()) else CFrame.new(p) * CFrame.Angles(alpha * 6, alpha * 4, 0)
+				mote.Transparency = alpha ^ 3
+				return nil
+			end, function()
+				mote:Destroy()
+			end)
+		end)
+	end
+	-- Rings tightening at the feet.
+	for k = 0, 1 do
+		task.delay(k * duration * 0.35, function()
+			if root.Parent and not interrupted() then
+				ring(CFrame.new(root.Position - Vector3.new(0, 2.8, 0)), 7 + 3 * power, 1.2, 0.15, 0.8, color, accent, duration * 0.6, 26, 0.35)
 			end
 		end)
 	end
-	-- Light motes converging on the caster.
-	for i = 1, 16 do
-		local offset = Vector3.new(math.random() - 0.5, math.random() * 0.8 - 0.2, math.random() - 0.5).Unit * (7 + math.random() * 4)
-		local mote = part(Vector3.new(0.35, 0.35, 0.35), CFrame.new(root.Position + offset), if i % 2 == 0 then params.Color else params.Accent)
-		run(duration * (0.75 + math.random() * 0.25), function(alpha)
-			local e = alpha ^ 2
-			local target = if root.Parent then root.Position else mote.Position
-			mote.CFrame = CFrame.new(target + offset * (1 - e)) * CFrame.Angles(alpha * 6, alpha * 4, 0)
-			mote.Transparency = alpha ^ 3
-		end, function()
-			mote:Destroy()
-		end)
-	end
+	-- Glow at the chest: a white core inside the gem colour.
+	local shell = part(Vector3.one * 0.5, CFrame.new(chest()), color, Enum.Material.Neon, 0.7)
+	shell.Shape = Enum.PartType.Ball
+	local core = part(Vector3.one * 0.3, CFrame.new(chest()), WHITE, Enum.Material.Neon, 0.4)
+	core.Shape = Enum.PartType.Ball
 	local pl = Instance.new("PointLight")
-	pl.Color = params.Color
-	pl.Range = 16
+	pl.Color = color
+	pl.Range = 14 + 6 * power
 	pl.Brightness = 0
-	pl.Parent = root
-	run(duration, function(alpha)
-		pl.Brightness = 4 * alpha
+	pl.Shadows = false
+	pl.Parent = core
+	local own = isLocal(character)
+	local nextShake = 0
+	run(duration, function(alpha, elapsed)
+		if interrupted() then
+			return true
+		end
+		local pulse = 1 + math.sin(elapsed * 22) * 0.08
+		shell.Size = Vector3.one * (0.5 + 2 * power * alpha) * pulse
+		core.Size = Vector3.one * (0.3 + 0.9 * power * alpha) * pulse
+		shell.CFrame = CFrame.new(chest())
+		core.CFrame = CFrame.new(chest())
+		shell.Transparency = 0.7 - 0.3 * alpha
+		pl.Brightness = 5 * power * alpha
+		if own and elapsed >= nextShake then
+			nextShake = elapsed + 0.22
+			CombatFX.Shake(0.08 + 0.1 * power * alpha)
+		end
+		return nil
 	end, function()
-		pl:Destroy()
-		charging[character] = nil
+		shell:Destroy()
+		core:Destroy()
 	end)
+end
+
+function Effects.NovaCharge(params)
+	gather(params.Caster, params.Duration or 0.55, params.Color, params.Accent, 1)
 end
 
 function Effects.Nova(params)
@@ -1069,8 +1273,12 @@ function Effects.Hit(params)
 	local color, accent = params.Color, params.Accent
 	local camera = Workspace.CurrentCamera
 	local facing = if camera then CFrame.lookAt(position, camera.CFrame.Position) * CFrame.Angles(math.rad(90), 0, 0) else CFrame.new(position)
+	if heavy then
+		ring(facing, 0.5, 5.5, 1.3, 0.1, color, accent, 0.32, 18, 0.05, true)
+	end
 	ring(facing, 0.5, if heavy then 5.5 else 3.2, if heavy then 0.8 else 0.5, 0.05, color, accent, if heavy then 0.32 else 0.22, 18)
 	burst(position, color, accent, if heavy then 12 else 7, if heavy then 34 else 22, if heavy then 1 else 0.7, 0.3)
+	shards(position, color, accent, if heavy then 7 else 3, if heavy then 26 else 16, if heavy then 0.9 else 0.6, 0.45)
 	flash(position, WHITE, 0.6, if heavy then 4.5 else 2.6, 0.14, 0.25)
 	light(position, color, if heavy then 18 else 10, 3, 0.25)
 	if typeof(target) == "Instance" then
@@ -1083,6 +1291,10 @@ function Effects.Hit(params)
 		CombatFX.Shake(if heavy then 0.55 else 0.22)
 	elseif heavy then
 		CombatFX.Shake(0.12)
+	end
+	-- Heavy blows you land or take: impact frame, speed lines, hit-stop.
+	if heavy and (isLocal(target) or isLocal(params.Attacker)) then
+		impact(position, color, 0.8)
 	end
 end
 
@@ -1314,12 +1526,14 @@ function Effects.Meteor(params)
 	local radius: number = params.Radius
 	local delay: number = params.Delay or 1
 	local color, accent = params.Color, params.Accent
+	gather(params.Caster, math.min(delay * 0.8, 1.4), color, accent, 0.8)
 	-- Warning circle that tightens until impact.
 	sigil(center, radius, color, accent, delay + 0.3, 7)
 	ring(CFrame.new(center + Vector3.new(0, 0.3, 0)), radius, radius * 0.2, 0.3, 1.2, accent, color, delay, 40, 0.2)
 	local from = center + Vector3.new(30, 90, 30)
 	local shell = part(Vector3.one * 7, CFrame.new(from), color, Enum.Material.Glass, 0.1)
 	local core = part(Vector3.one * 4, CFrame.new(from), WHITE)
+	Toon.Outline(shell, color, Toon.Priority.Effect, 1, folder)
 	local a0 = attachment(Vector3.new(3, 0, 0), core)
 	local a1 = attachment(Vector3.new(-3, 0, 0), core)
 	local trail = Instance.new("Trail")
@@ -1600,6 +1814,7 @@ function Effects.Beam(params)
 	if not root then
 		return
 	end
+	gather(character, 0.3, color, accent, 0.7)
 	local start = points(root)
 	local glow = ribbon(start, { width * 0.8, width * 1.9, width * 1.7, width * 1.2 }, { color, color, accent, accent })
 	local body = ribbon(start, { width * 0.4, width, width * 0.9, width * 0.6 }, { WHITE, color, color, accent })
@@ -1847,7 +2062,12 @@ function Effects.Domain(params)
 	local duration: number = (params.Duration or 8) + 1
 	local color, accent = params.Color, params.Accent
 	local dark = color:Lerp(Color3.new(0, 0, 0), 0.75)
-	screenBanner(center, radius * 4, "DOMAIN EXPANSION", string.upper(params.Name or "Dimension"), color, accent, 2.6)
+	local caster = params.Caster
+	local cinematic = isLocal(caster) and typeof(caster) == "Instance" and Cutscene.Domain(caster :: Model, center, radius, params.Name or "Dimension", color, accent)
+	if not cinematic then
+		screenBanner(center, radius * 4, "DOMAIN EXPANSION", string.upper(params.Name or "Dimension"), color, accent, 2.6)
+	end
+	gather(caster, 0.8, color, accent, 1.3)
 
 	local pieces: { BasePart } = {}
 	-- Floor of the dimension
@@ -1941,38 +2161,134 @@ end
 -- Transformation
 --------------------------------------------------------------------------------
 
+-- Cracks of crystal spreading over a body: glass shards that grow out of
+-- the limbs until `breakAt`, then burst off as the beast takes shape.
+local function crackBody(character: Instance?, color: Color3, accent: Color3, breakAt: number)
+	if typeof(character) ~= "Instance" then
+		return
+	end
+	local limbs = {}
+	for _, d in character:GetChildren() do
+		if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" and d.Transparency < 0.9 then
+			table.insert(limbs, d)
+		end
+	end
+	local spawned = os.clock()
+	for _, limb in limbs do
+		for k = 1, if limb.Size.Magnitude > 2 then 3 else 2 do
+			task.delay(breakAt * (0.2 + 0.6 * math.random()), function()
+				if not limb.Parent then
+					return
+				end
+				-- A point on the limb's surface, pointing outward.
+				local half = limb.Size / 2
+				local local_ = Vector3.new((math.random() * 2 - 1) * half.X, (math.random() * 2 - 1) * half.Y, (math.random() * 2 - 1) * half.Z)
+				local axis = math.random(1, 3)
+				local sign = if math.random() < 0.5 then -1 else 1
+				local normal = if axis == 1 then Vector3.new(sign, 0, 0) elseif axis == 2 then Vector3.new(0, sign, 0) else Vector3.new(0, 0, sign)
+				local_ = Vector3.new(if axis == 1 then sign * half.X else local_.X, if axis == 2 then sign * half.Y else local_.Y, if axis == 3 then sign * half.Z else local_.Z)
+				local size = 0.35 + math.random() * 0.4
+				local shard = part(Vector3.new(size, size, 0.1), CFrame.new(), if k % 2 == 0 then accent else color, Enum.Material.Glass, 0.1)
+				local glint = part(Vector3.new(size * 0.4, size * 0.4, 0.1), CFrame.new(), WHITE)
+				-- Grows out of the limb until the break, then flies off.
+				local born = os.clock()
+				local life = math.max(0.15, breakAt - (born - spawned))
+				local flyFrom: CFrame? = nil
+				local flyVelocity = Vector3.zero
+				run(life + 0.6, function(_, elapsed)
+					if not limb.Parent and not flyFrom then
+						return true
+					end
+					if elapsed < life then
+						local base = limb.CFrame * CFrame.new(local_)
+						local out = limb.CFrame:VectorToWorldSpace(normal)
+						local grown = math.min(1, elapsed / 0.3)
+						local length = 0.1 + 1.1 * grown * size
+						shard.Size = Vector3.new(size * 0.6, size * 0.6, length)
+						glint.Size = Vector3.new(size * 0.25, size * 0.25, length * 0.9)
+						shard.CFrame = CFrame.lookAt(base.Position, base.Position + out) * CFrame.Angles(0, 0, k) * CFrame.new(0, 0, -length / 2) * CFrame.Angles(0, 0, math.rad(45))
+						glint.CFrame = shard.CFrame
+						flyVelocity = out * (14 + math.random() * 10) + Vector3.new(0, 8, 0)
+					else
+						flyFrom = flyFrom or shard.CFrame
+						local t = elapsed - life
+						shard.CFrame = (flyFrom :: CFrame) + flyVelocity * t + Vector3.new(0, -20 * t * t, 0)
+						glint.CFrame = shard.CFrame
+						local fade = math.clamp(t / 0.5, 0, 1)
+						shard.Transparency = 0.1 + 0.9 * fade
+						glint.Transparency = fade
+					end
+					return nil
+				end, function()
+					shard:Destroy()
+					glint:Destroy()
+				end)
+			end)
+		end
+	end
+end
+
 function Effects.Transform(params)
+	local caster = params.Caster
 	local center: Vector3 = params.Position
 	local color, accent = params.Color, params.Accent
-	screenBanner(center, 220, string.upper(params.Name or "Transformation"), "TRANSFORMATION", color, accent, 2.2)
-	local column = part(Vector3.new(80, 10, 10), CFrame.new(center + Vector3.new(0, 38, 0)) * CFrame.Angles(0, 0, math.rad(90)), color, Enum.Material.Neon, 0.1)
-	column.Shape = Enum.PartType.Cylinder
-	run(1, function(alpha)
-		local w = 10 * (1 - easeOut(alpha)) + 0.2
-		column.Size = Vector3.new(80, w, w)
-		column.Transparency = 0.1 + 0.9 * alpha
-	end, function()
-		column:Destroy()
-	end)
-	for k = 1, 3 do
-		task.delay(k * 0.12, function()
-			ring(CFrame.new(center + Vector3.new(0, k * 3 - 3, 0)), 1, 14 + k * 3, 1.6, 0.2, color, accent, 0.6, 36)
+	local cut = CombatConfig.Cutscene
+	-- The caster sees it as a cutscene; everyone else in the world.
+	local cinematic = isLocal(caster) and typeof(caster) == "Instance" and Cutscene.Transform(caster :: Model, params.Name or "Transformation", color, accent)
+	if not cinematic then
+		screenBanner(center, 220, string.upper(params.Name or "Transformation"), "TRANSFORMATION", color, accent, 2.6)
+	end
+	-- Gathering power while the body cracks into crystal...
+	gather(caster, cut.BeastAt, color, accent, 1.5)
+	crackBody(caster, color, accent, cut.BeastAt)
+	-- ...then the beast bursts out of the light.
+	task.delay(cut.BeastAt, function()
+		local root = rootOf(caster)
+		local at = if root then root.Position else center
+		local column = part(Vector3.new(80, 10, 10), CFrame.new(at + Vector3.new(0, 38, 0)) * CFrame.Angles(0, 0, math.rad(90)), color, Enum.Material.Neon, 0.1)
+		column.Shape = Enum.PartType.Cylinder
+		run(1, function(alpha)
+			local w = 10 * (1 - easeOut(alpha)) + 0.2
+			column.Size = Vector3.new(80, w, w)
+			column.Transparency = 0.1 + 0.9 * alpha
+			return nil
+		end, function()
+			column:Destroy()
 		end)
-	end
-	flash(center, WHITE, 2, 18, 0.45, 0.2)
-	burst(center, color, accent, 28, 50, 1.3, 0.8, Vector3.new(0, 1.2, 0))
-	spikes(center, 12, 7, 8, color, accent, 1)
-	light(center, color, 60, 8, 1)
-	local camera = Workspace.CurrentCamera
-	if camera and (camera.CFrame.Position - center).Magnitude < 80 then
-		CombatFX.Shake(0.6)
-	end
+		for k = 1, 3 do
+			task.delay(k * 0.12, function()
+				ring(CFrame.new(at + Vector3.new(0, k * 3 - 3, 0)), 1, 14 + k * 3, 1.6, 0.2, color, accent, 0.6, 36)
+			end)
+		end
+		flash(at, WHITE, 2, 18, 0.45, 0.2)
+		burst(at, color, accent, 28, 50, 1.3, 0.8, Vector3.new(0, 1.2, 0))
+		spikes(at, 12, 7, 8, color, accent, 1)
+		light(at, color, 60, 8, 1)
+		local camera = Workspace.CurrentCamera
+		if not cinematic and camera and (camera.CFrame.Position - at).Magnitude < 80 then
+			CombatFX.Shake(0.6)
+		end
+	end)
 end
 
 function Effects.TransformEnd(params)
 	local center: Vector3 = params.Position
+	local color, accent = params.Color, params.Accent
 	flash(center, WHITE, 2, 12, 0.35, 0.3)
-	burst(center, WHITE, Theme.Colors.Lavender, 18, 35, 1, 0.6)
+	burst(center, color, accent, 18, 35, 1, 0.6)
+	-- The body reforms in a column of light and lands with a ring.
+	local ground = groundBelow(center) or (center - Vector3.new(0, 3, 0))
+	ring(CFrame.new(ground + Vector3.new(0, 0.2, 0)), 1, 9, 1.4, 0.2, color, accent, 0.5, 32)
+	local column = part(Vector3.new(14, 3.2, 3.2), CFrame.new(ground + Vector3.new(0, 7, 0)) * CFrame.Angles(0, 0, math.rad(90)), color, Enum.Material.Neon, 0.3)
+	column.Shape = Enum.PartType.Cylinder
+	run(0.45, function(alpha)
+		local w = 3.2 * (1 - alpha) + 0.1
+		column.Size = Vector3.new(14, w, w)
+		column.Transparency = 0.3 + 0.7 * alpha
+		return nil
+	end, function()
+		column:Destroy()
+	end)
 end
 
 --------------------------------------------------------------------------------
@@ -2051,13 +2367,44 @@ end
 -- Entry points
 --------------------------------------------------------------------------------
 
+-- Effects further than this from the camera are skipped (their body motion
+-- still plays). Ultimates and anything involving you always play.
+local FX_CULL = 380
+local ALWAYS = { Domain = true, DomainEnd = true, Transform = true, TransformEnd = true, BeamEnd = true, ProjectileEnd = true, ProjectileSteer = true, Shatter = true, Spawn = true }
+
+local function anchorOf(params: { [string]: any }): Vector3?
+	for _, key in { "Position", "Center", "Origin" } do
+		local v = params[key]
+		if typeof(v) == "Vector3" then
+			return v
+		end
+	end
+	local root = rootOf(params.Caster) or rootOf(params.Target)
+	return if root then root.Position else nil
+end
+
+local function tooFar(kind: string, params: { [string]: any }): boolean
+	if ALWAYS[kind] or isLocal(params.Caster) or isLocal(params.Target) or isLocal(params.Attacker) then
+		return false
+	end
+	local camera = Workspace.CurrentCamera
+	local at = anchorOf(params)
+	return camera ~= nil and at ~= nil and (at - camera.CFrame.Position).Magnitude > FX_CULL
+end
+
 local function play(kind: string, params: { [string]: any })
-	local anim = ANIM_FOR[kind]
-	if anim and type(params) == "table" and params.Caster then
-		CombatAnim.Play(params.Caster, anim)
+	if type(params) == "table" and params.Caster then
+		if kind == "BeamEnd" then
+			CombatAnim.Stop(params.Caster)
+		else
+			local motion, hold, duration = motionFor(kind, params)
+			if motion then
+				CombatAnim.Play(params.Caster, motion, hold, duration)
+			end
+		end
 	end
 	local effect = Effects[kind]
-	if effect and type(params) == "table" then
+	if effect and type(params) == "table" and not tooFar(kind, params) then
 		params.Color = if typeof(params.Color) == "Color3" then params.Color else WHITE
 		params.Accent = if typeof(params.Accent) == "Color3" then params.Accent else Theme.Colors.Lavender
 		local ok, err = pcall(effect, params)
@@ -2079,6 +2426,11 @@ function CombatFX.Start()
 	host = part(Vector3.new(0.2, 0.2, 0.2), CFrame.new(), WHITE, Enum.Material.SmoothPlastic, 1)
 	host.Name = "Anchor"
 	startShake()
+	Cutscene.OnShake = CombatFX.Shake
+	table.insert(Toon.OnHitStop, function(seconds: number)
+		frozenUntil = math.max(frozenUntil, os.clock() + seconds)
+	end)
+	table.insert(Toon.OnHitStop, CombatAnim.HitStop)
 
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local remote = remotes:WaitForChild("CombatFX") :: RemoteEvent

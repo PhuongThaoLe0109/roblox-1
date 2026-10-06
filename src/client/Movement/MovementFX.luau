@@ -9,6 +9,8 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local GemCatalog = require(ReplicatedStorage:WaitForChild("GemCatalog"))
+local CombatAnim = require(script.Parent.Parent:WaitForChild("Combat"):WaitForChild("CombatAnim"))
+local Toon = require(script.Parent.Parent:WaitForChild("Toon"))
 
 local MovementFX = {}
 
@@ -61,8 +63,9 @@ local function easeOut(t: number): number
 	return 1 - (1 - t) ^ 3
 end
 
--- A flat ring of light growing from r0 to r1 around `center`.
-local function ring(center: CFrame, r0: number, r1: number, width: number, color: Color3, accent: Color3, duration: number)
+-- A flat ring of light growing from r0 to r1 around `center`. With `ink` it
+-- is the dark outline band drawn behind a bright ring (cel-shaded look).
+local function ring(center: CFrame, r0: number, r1: number, width: number, color: Color3, accent: Color3, duration: number, ink: boolean?)
 	local n = 24
 	local attachments, beams = {}, {}
 	for i = 0, n do
@@ -76,8 +79,9 @@ local function ring(center: CFrame, r0: number, r1: number, width: number, color
 		beam.Attachment1 = attachments[i + 1]
 		local t0 = 0.5 + 0.5 * math.sin((i - 1) / n * math.pi * 4)
 		local t1 = 0.5 + 0.5 * math.sin(i / n * math.pi * 4)
-		beam.Color = ColorSequence.new(color:Lerp(accent, t0), color:Lerp(accent, t1))
-		beam.LightEmission = 1
+		beam.Color = if ink then ColorSequence.new(Toon.Ink(color)) else ColorSequence.new(color:Lerp(accent, t0), color:Lerp(accent, t1))
+		beam.LightEmission = if ink then 0 else 1
+		beam.ZOffset = if ink then -0.2 else 0
 		beam.LightInfluence = 0
 		beam.FaceCamera = true
 		beam.Segments = 1
@@ -91,7 +95,8 @@ local function ring(center: CFrame, r0: number, r1: number, width: number, color
 			a.Position = center:PointToWorldSpace(Vector3.new(math.cos(angle) * r, 0, math.sin(angle) * r))
 		end
 		local w = width * (1 - alpha * 0.7)
-		local seq = NumberSequence.new(0.05 + 0.95 * alpha ^ 1.5)
+		-- Fades in hard steps, like anime frames.
+		local seq = NumberSequence.new(0.05 + 0.95 * (math.floor(alpha * 4) / 4) ^ 1.2)
 		for _, beam in beams do
 			beam.Width0 = w
 			beam.Width1 = w
@@ -107,22 +112,27 @@ local function ring(center: CFrame, r0: number, r1: number, width: number, color
 	end)
 end
 
--- A neon copy of the character's body that fades where it stood.
+-- A neon copy of the character's body that fades where it stood, inked
+-- around its silhouette.
 local function afterimage(character: Model, color: Color3)
 	local ghosts = {}
+	local group = Instance.new("Model")
+	group.Name = "Afterimage"
+	group.Parent = folder
 	for _, limb in character:GetChildren() do
 		if limb:IsA("BasePart") and limb.Name ~= "HumanoidRootPart" and limb.Transparency < 0.9 then
-			table.insert(ghosts, part(limb.Size * 1.02, limb.CFrame, color, 0.35))
+			local ghost = part(limb.Size * 1.02, limb.CFrame, color, 0.35)
+			ghost.Parent = group
+			table.insert(ghosts, ghost)
 		end
 	end
+	Toon.Outline(group, color, Toon.Priority.Gear, 1, group)
 	run(0.32, function(alpha)
 		for _, ghost in ghosts do
 			ghost.Transparency = 0.35 + 0.65 * alpha
 		end
 	end, function()
-		for _, ghost in ghosts do
-			ghost:Destroy()
-		end
+		group:Destroy()
 	end)
 end
 
@@ -135,6 +145,7 @@ function MovementFX.Dash(character: Model, direction: Vector3?)
 	if not root or not root:IsA("BasePart") then
 		return
 	end
+	CombatAnim.Play(character, "Dash")
 	local color, accent = colorsOf(character)
 	local dir = direction or root.CFrame.LookVector
 	dir = Vector3.new(dir.X, 0, dir.Z)
@@ -142,6 +153,7 @@ function MovementFX.Dash(character: Model, direction: Vector3?)
 
 	-- A ring standing across the dash, plus afterimages along the path.
 	local start = CFrame.lookAt(root.Position, root.Position + dir) * CFrame.Angles(math.rad(90), 0, 0)
+	ring(start, 0.8, 4.2, 0.9, color, accent, 0.32, true)
 	ring(start, 0.8, 4.2, 0.55, color, accent, 0.32)
 	task.spawn(function()
 		for i = 1, 4 do
@@ -171,8 +183,10 @@ function MovementFX.DoubleJump(character: Model)
 	if not root or not root:IsA("BasePart") then
 		return
 	end
+	CombatAnim.Play(character, "Flip")
 	local color, accent = colorsOf(character)
 	local base = CFrame.new(feet(root))
+	ring(base, 0.6, 4.4, 1, color, accent, 0.4, true)
 	ring(base, 0.6, 4.4, 0.6, color, accent, 0.4)
 	ring(base * CFrame.new(0, -0.6, 0), 0.4, 2.8, 0.35, accent, color, 0.35)
 	-- Crystal shards kicked downward.
