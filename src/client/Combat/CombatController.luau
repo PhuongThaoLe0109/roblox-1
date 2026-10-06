@@ -218,9 +218,9 @@ local function canAct(): boolean
 		notice("Safe zone: step off the plaza to fight", "Info")
 		return false
 	end
-	-- Attacking knocks you off the hoverboard.
+	-- Attacking knocks you off the broom.
 	if MovementController.State.Riding then
-		MovementController.ToggleHoverboard()
+		MovementController.ToggleBroom()
 	end
 	return true
 end

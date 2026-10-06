@@ -1,4 +1,4 @@
-# roblox-1 — Prism Shores (working title)
+# roblox-1 — Universal Gems
 
 An open-world PvP brawler: roll gems, wear their aura, and fight with the gem's own kit anywhere in the world
 (Sol's RNG meets an anime battlegrounds game, in a Steven-Universe-style crystal world).
@@ -10,6 +10,17 @@ Luau source laid out for [Rojo](https://rojo.space) (`rojo serve`, then connect 
 2. Wear a gem: it decides your **aura** and your **combat kit** (weapon, skills, transformation, domain).
 3. Step off the plaza and fight anyone, anywhere. There is no Play button.
 4. When you're defeated you **shatter** into your gem, then reform at the plaza a few seconds later.
+
+## Getting around (`src/shared/MovementConfig.luau`)
+
+- Everyone **runs** at full speed (30 studs/s); there is no sprint key. Beast forms run at their own speed × 1.65.
+- **Dash** (Q): a lunge with the arms swept back, gem-coloured afterimages and a braking stop. One more in the air.
+- **Double jump**: a forward flip over a ring of light. Rising, falling and landing each have their own body pose.
+- **Flying broom** (B): a slim wooden broom with a crystal tip and a gem-tinted bristle bundle that streaks light.
+  You ride it astride, facing where it flies, hands on the shaft. W flies along the camera, S brakes / backs off,
+  A / D glide, Space / Ctrl climb / dive; it banks into turns and tips with the climb. Not in combat or beast form;
+  using a skill, getting hit, stunned or transforming knocks you off, and you can't remount for 2.5 s. The server
+  checks the flight speed and a height limit (220 studs above the ground) in `MovementGuard`.
 
 ## Combat (`src/shared/GemKits.luau`, `src/server/Modules/Combat`)
 
@@ -55,6 +66,7 @@ Offline checks:
 ```sh
 tools/kit-check.sh path/to/luau      # all 100 kits: skill counts, names, keys, descriptions
 tools/combat-check.sh path/to/luau   # builds the 8 beasts and 9 weapons against the Roblox stub, then runs kit-check
+tools/anim-check.sh path/to/luau     # every animation on R15 + R6 dummies, holds, stuns, movement layers, the broom
 ```
 
 ## Gems & rolling
@@ -110,7 +122,7 @@ src/
     GemCatalog       100 gems: name, "1 in N" odds, aura colours
     GemKits          every gem's combat kit: melee style, skills, beast, domain
     CombatConfig     general combat numbers + status attribute names
-    MovementConfig   sprint, dash, double jump, hoverboard
+    MovementConfig   run speed, dash, double jump, flying broom
     Signal           leak-safe event object
   server/          -> ServerScriptService
     Main.server      entry point
@@ -119,7 +131,7 @@ src/
       RollConfig     roll cooldown, announcements, hidden pity tiers (server-only)
       RollEngine     pure roll + pity logic (simulated offline by tools/roll-sim.sh)
       RollService    RequestRoll / RequestEquip handling, announcements
-      MovementService hoverboard + movement effect relay
+      MovementService flying broom (model, rules, knock-off) + movement effect relay
       AdminService   founder chat commands (?admin)
       Remotes        ReplicatedStorage.Remotes
       Combat/
@@ -138,7 +150,7 @@ src/
     Main.client      entry point (ScreenGui + responsive UIScale)
     MapFX            client-side animation of the world's decoration
     ClientData       local mirror of inventory / equipped gem / rolls
-    Movement/        MovementController (sprint, dash, double jump, board, combat speeds), MovementFX
+    Movement/        MovementController (run, dash, double jump, broom flight, combat speeds), MovementFX
     Combat/
       CombatController inputs, aim, cooldowns, melee prediction, self-moving skills
       CombatFX       every combat effect (swings, projectiles, areas, domains, transformations, shattering)
@@ -155,7 +167,7 @@ src/
       LobbyHud       title, stats, ROLL + cooldown, Auto / Fast, Inventory
       CombatHud      health, skill bar, combo, kill feed, status, shattered screen
       SkillGuide     the SKILLS / H panel explaining your gem's kit
-      MovementHud    board button, sprint and dash pills
+      MovementHud    broom button, descend (while flying) and dash pills
       RollReveal     spinning reel + reveal (rays, flash, gradient lettering, NEW!/×count)
       Inventory      100-gem collection grid, filters, detail pane, equip
       Announcements  server cards, rainbow banner for the rarest pulls, toasts
@@ -216,7 +228,7 @@ tools/render-map.py parts.txt preview.png --cam 0,105,600 --look 0,70,-20   # z-
 | `GetProfile` | client → server | `() -> { Inventory, Equipped, Rolls }` |
 | `InventorySync` | server → client | `("Full", snapshot)`, `("Gem", id, count)`, `("Equipped", id)` |
 | `Announce` | server → all | `(kind, playerName, gemId)` with kind `"Server"` or `"Banner"` |
-| `SetHoverboard` | client → server | `(on: boolean)`: server builds/removes the board, sets character attribute `Hoverboard` |
+| `SetBroom` | client → server | `(on: boolean)`: server builds/removes the broom, sets character attribute `Broom` |
 | `MovementFX` | client → server → others | `("Dash" \| "DoubleJump", direction?)`, relayed as `(character, kind, direction?)` |
 | `CombatAction` | client → server | `(action, aimDirection, aimPoint)`: action `"M1"`, `"Z"`..`"V"`, `"G"`, `"T"`, `"Block"`, `"Unblock"`, `"Dash"` |
 | `CombatState` | server → client | `("Cooldown", slot, readyAt, combo?)`, `("Rejected", slot, reason)`, `("Reset")` |
@@ -234,10 +246,11 @@ beast, domain, shattered, ...), all as server-time timestamps where they expire.
 |---|---|---|
 | Roll | R / ROLL button | X |
 | Inventory | I | Y |
-| Sprint (hold) | Ctrl / SPRINT button | L3 (toggle) |
 | Dash (one more in the air) | Q / DASH button | B |
 | Double jump | Space in the air | A in the air |
-| Hoverboard (not while in combat) | B / BOARD button | D-pad up |
+| Flying broom (not while in combat) | B / BROOM button | D-pad up |
+| Fly: along the camera / brake / glide | W / S / A D (touch: joystick) | left stick |
+| Fly: climb / dive | Space / Ctrl (touch: Jump / hold DESCEND) | A / hold L3 |
 | Attack (hold for combo) | Left mouse / ATTACK slot | R2 |
 | Skills | Z X C V | R1, L1, D-pad left, D-pad right |
 | Transformation | G | D-pad down |

@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local GemCatalog = require(ReplicatedStorage:WaitForChild("GemCatalog"))
+local CombatAnim = require(script.Parent.Parent:WaitForChild("Combat"):WaitForChild("CombatAnim"))
 
 local MovementFX = {}
 
@@ -135,6 +136,7 @@ function MovementFX.Dash(character: Model, direction: Vector3?)
 	if not root or not root:IsA("BasePart") then
 		return
 	end
+	CombatAnim.Play(character, "Dash")
 	local color, accent = colorsOf(character)
 	local dir = direction or root.CFrame.LookVector
 	dir = Vector3.new(dir.X, 0, dir.Z)
@@ -171,6 +173,7 @@ function MovementFX.DoubleJump(character: Model)
 	if not root or not root:IsA("BasePart") then
 		return
 	end
+	CombatAnim.Play(character, "Flip")
 	local color, accent = colorsOf(character)
 	local base = CFrame.new(feet(root))
 	ring(base, 0.6, 4.4, 0.6, color, accent, 0.4)

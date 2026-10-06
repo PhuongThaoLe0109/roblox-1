@@ -7,7 +7,7 @@
 --   GetProfile     RemoteFunction  client -> server  () -> { Inventory, Equipped, Rolls }?
 --   InventorySync  RemoteEvent     server -> client  ("Full", snapshot) | ("Gem", id, count) | ("Equipped", id)
 --   Announce       RemoteEvent     server -> all     (kind, playerName, gemId)  kind = "Server" | "Banner"
---   SetHoverboard  RemoteEvent     client -> server  (on: boolean)
+--   SetBroom       RemoteEvent     client -> server  (on: boolean)
 --   MovementFX     RemoteEvent     client -> server  (kind, direction?)   kind = "Dash" | "DoubleJump"
 --                                  server -> others  (character, kind, direction?)
 --   CombatAction   RemoteEvent     client -> server  (action, aimDirection: Vector3, aimPoint: Vector3)
@@ -36,7 +36,7 @@ Remotes.RequestEquip = create("RemoteFunction", "RequestEquip") :: RemoteFunctio
 Remotes.GetProfile = create("RemoteFunction", "GetProfile") :: RemoteFunction
 Remotes.InventorySync = create("RemoteEvent", "InventorySync") :: RemoteEvent
 Remotes.Announce = create("RemoteEvent", "Announce") :: RemoteEvent
-Remotes.SetHoverboard = create("RemoteEvent", "SetHoverboard") :: RemoteEvent
+Remotes.SetBroom = create("RemoteEvent", "SetBroom") :: RemoteEvent
 Remotes.MovementFX = create("RemoteEvent", "MovementFX") :: RemoteEvent
 Remotes.CombatAction = create("RemoteEvent", "CombatAction") :: RemoteEvent
 Remotes.CombatState = create("RemoteEvent", "CombatState") :: RemoteEvent

@@ -23,9 +23,8 @@ local CONTROLS = {
 	{ "M1 / tap ATTACK", "Melee combo (hold to keep swinging)" },
 	{ "F (hold)", "Block hits from the front; too much breaks your guard" },
 	{ "Q", "Dash, with a moment of invulnerability" },
-	{ "Ctrl", "Sprint" },
 	{ "Space ×2", "Double jump" },
-	{ "B", "Hoverboard (not while in combat)" },
+	{ "B", "Flying broom: W follow the camera, Space / Ctrl up / down (not in combat)" },
 	{ "R", "Roll for gems" },
 	{ "I", "Inventory: try on and equip gems (not mid-fight)" },
 }

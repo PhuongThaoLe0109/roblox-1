@@ -1,6 +1,7 @@
 -- MovementHud
--- Bottom-right controls for getting around: the round hoverboard button,
--- Sprint and Dash pills (tappable on touch screens, with the dash cooldown
+-- Bottom-right controls for getting around: the round broom button (with its
+-- cooldown after getting off), a Descend pill shown while flying (hold it on
+-- touch screens / gamepads), the Dash pill (tappable, with the dash cooldown
 -- filling back up) and a double-jump hint. Key hints follow the last input
 -- device used.
 
@@ -16,9 +17,9 @@ local C = Theme.Colors
 local MovementHud = {}
 
 local KEYS = {
-	Keyboard = { Board = "B", Sprint = "Ctrl", Dash = "Q", Jump = "Space ×2" },
-	Gamepad = { Board = "↑", Sprint = "L3", Dash = "B", Jump = "A ×2" },
-	Touch = { Board = "", Sprint = "", Dash = "", Jump = "Jump ×2" },
+	Keyboard = { Board = "B", Descend = "Ctrl", Dash = "Q", Jump = "Space ×2", Climb = "Space" },
+	Gamepad = { Board = "↑", Descend = "L3", Dash = "B", Jump = "A ×2", Climb = "A" },
+	Touch = { Board = "", Descend = "hold", Dash = "", Jump = "Jump ×2", Climb = "Jump" },
 }
 
 local function deviceOf(inputType: Enum.UserInputType): string
@@ -30,62 +31,83 @@ local function deviceOf(inputType: Enum.UserInputType): string
 	return "Keyboard"
 end
 
--- The hoverboard drawn from UI frames: a tilted glass deck with a bright core,
--- glowing thrusters and a little wake.
-local function boardIcon(parent: Instance): Frame
+-- The broom drawn from UI frames: a slim wooden shaft with a crystal tip, a
+-- glowing collar, a fanned bristle bundle and a little wake.
+local function broomIcon(parent: Instance): Frame
 	local holder = Theme.new("Frame", {
 		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(60, 40),
+		Size = UDim2.fromOffset(64, 40),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.42),
-		Rotation = -18,
+		Rotation = -22,
 		Parent = parent,
 	})
 	local wake = Theme.new("Frame", {
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(0, 10, 0.5, 4),
-		Size = UDim2.fromOffset(22, 6),
+		Position = UDim2.new(0, 6, 0.5, 0),
+		Size = UDim2.fromOffset(20, 7),
 		Parent = holder,
 	})
 	Theme.round().Parent = wake
 	Theme.new("UIGradient", {
 		Color = ColorSequence.new(C.Cyan, C.Pink),
-		Transparency = NumberSequence.new(1, 0.1),
+		Transparency = NumberSequence.new(1, 0.15),
 		Parent = wake,
 	})
-	local deck = Theme.new("Frame", {
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BorderSizePixel = 0,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(52, 13),
-		Parent = holder,
-	})
-	Theme.round().Parent = deck
-	Theme.shimmer(deck, nil, 0.4, 0)
-	Theme.new("UIStroke", { Color = Color3.fromRGB(40, 20, 70), Thickness = 1.5, Transparency = 0.2, Parent = deck })
-	local core = Theme.new("Frame", {
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BorderSizePixel = 0,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(0.75, 0, 0, 3),
-		Parent = deck,
-	})
-	Theme.round().Parent = core
-	for _, x in { 0.3, 0.7 } do
-		local thruster = Theme.new("Frame", {
-			BackgroundColor3 = C.Cyan,
+	-- Bristles: thin straw strokes fanning out to the left.
+	for i = -3, 3 do
+		local straw = Theme.new("Frame", {
+			BackgroundColor3 = if i % 2 == 0 then Color3.fromRGB(226, 190, 120) else Color3.fromRGB(186, 146, 90),
 			BorderSizePixel = 0,
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(x, 0, 0.5, 8),
-			Size = UDim2.fromOffset(9, 5),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(0, 24, 0.5, 0),
+			Size = UDim2.fromOffset(19, 3),
+			Rotation = i * 7,
 			Parent = holder,
 		})
-		Theme.round().Parent = thruster
+		Theme.round().Parent = straw
+		if i % 2 ~= 0 then
+			local glint = Theme.new("Frame", {
+				BackgroundColor3 = C.Pink,
+				BorderSizePixel = 0,
+				Size = UDim2.fromOffset(5, 3),
+				Parent = straw,
+			})
+			Theme.round().Parent = glint
+		end
 	end
+	local shaft = Theme.new("Frame", {
+		BackgroundColor3 = Color3.fromRGB(150, 98, 62),
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 22, 0.5, 0),
+		Size = UDim2.fromOffset(36, 4),
+		Parent = holder,
+	})
+	Theme.round().Parent = shaft
+	Theme.new("UIStroke", { Color = Color3.fromRGB(40, 20, 70), Thickness = 1, Transparency = 0.3, Parent = shaft })
+	local collar = Theme.new("Frame", {
+		BackgroundColor3 = C.Cyan,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0, 24, 0.5, 0),
+		Size = UDim2.fromOffset(4, 9),
+		Parent = holder,
+	})
+	Theme.round().Parent = collar
+	local tip = Theme.new("Frame", {
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0, 60, 0.5, 0),
+		Size = UDim2.fromOffset(8, 8),
+		Rotation = 45,
+		Parent = holder,
+	})
+	Theme.shimmer(tip, nil, 0.4, 0)
+	Theme.new("UIStroke", { Color = Color3.fromRGB(40, 20, 70), Thickness = 1.2, Transparency = 0.2, Parent = tip })
 	return holder
 end
 
@@ -152,7 +174,7 @@ function MovementHud.Init(screen: ScreenGui, context)
 	layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 	layout.Parent = root
 
-	-- Hoverboard button
+	-- Broom button
 	local board = Theme.new("TextButton", {
 		Text = "",
 		AutoButtonColor = false,
@@ -168,9 +190,9 @@ function MovementHud.Init(screen: ScreenGui, context)
 	local boardStroke = Theme.stroke(Color3.new(1, 1, 1), 2.5, 0.2)
 	boardStroke.Parent = board
 	local boardShimmer = Theme.shimmer(boardStroke, nil, 0.3)
-	boardIcon(board)
+	broomIcon(board)
 	local boardLabel = Theme.label({
-		Text = "BOARD",
+		Text = "BROOM",
 		FontFace = Theme.Faces.Heavy,
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Center,
@@ -195,7 +217,10 @@ function MovementHud.Init(screen: ScreenGui, context)
 	Theme.corner(6).Parent = boardKey
 	local boardScale = Theme.new("UIScale", { Parent = board })
 
-	local sprint, sprintKey, sprintFill, sprintStroke = pill(root, "SPRINT", 2)
+	-- Shown only while flying, in the slot under the broom button.
+	local descend, descendKey, descendFill, descendStroke = pill(root, "DESCEND", 2)
+	descend.Visible = false
+	descendFill.Visible = false
 	local dash, dashKey, dashFill = pill(root, "DASH", 3)
 	local jumpHint = Theme.label({
 		Text = "",
@@ -209,35 +234,46 @@ function MovementHud.Init(screen: ScreenGui, context)
 		Parent = root,
 	})
 
+	local state = MovementController.State
 	local function setDevice(device: string)
 		local keys = KEYS[device]
 		boardKey.Text = keys.Board
 		boardKey.Visible = keys.Board ~= ""
-		sprintKey.Text = keys.Sprint
+		descendKey.Text = keys.Descend
 		dashKey.Text = keys.Dash
-		jumpHint.Text = `Double jump  {keys.Jump}`
+		jumpHint.Text = if state.Riding then `Climb  {keys.Climb}` else `Double jump  {keys.Jump}`
 	end
-	setDevice(if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then "Touch" else "Keyboard")
+	local device = if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then "Touch" else "Keyboard"
+	setDevice(device)
 	UserInputService.LastInputTypeChanged:Connect(function(inputType)
-		setDevice(deviceOf(inputType))
+		device = deviceOf(inputType)
+		setDevice(device)
 	end)
-
-	local state = MovementController.State
 	local function refresh()
 		local riding = state.Riding
 		board.Visible = MovementController.CanRide() or riding
 		boardStroke.Color = if riding then C.Gold else Color3.new(1, 1, 1)
 		boardShimmer.Enabled = not riding
 		board.BackgroundColor3 = if riding then C.PanelLight else C.Panel
-		boardLabel.Text = if riding then "RIDING" else "BOARD"
-		sprintFill.Visible = state.Sprinting
-		sprintStroke.Transparency = if state.Sprinting then 0 else 0.45
+		boardLabel.Text = if riding then "FLYING" else "BROOM"
+		descend.Visible = riding
+		dash.Visible = not riding
+		descendFill.Visible = riding and state.Descending
+		descendStroke.Transparency = if state.Descending then 0 else 0.45
+		setDevice(device)
 	end
 	MovementController.Changed:Connect(refresh)
 	refresh()
 
-	-- Dash cooldown refills left to right.
+	-- Dash cooldown refills left to right; the broom shows its remount wait.
 	RunService.RenderStepped:Connect(function()
+		local wait = MovementController.BroomCooldown()
+		if not state.Riding then
+			boardLabel.Text = if wait > 0 then string.format("%.1fs", wait) else "BROOM"
+			boardLabel.TextTransparency = if wait > 0 then 0.35 else 0
+		else
+			boardLabel.TextTransparency = 0
+		end
 		local left = state.DashReadyAt - os.clock()
 		local alpha = if left <= 0 then 1 else 1 - left / MovementConfig.Dash.Cooldown
 		dashFill.Size = UDim2.fromScale(alpha, 1)
@@ -247,10 +283,20 @@ function MovementHud.Init(screen: ScreenGui, context)
 	board.Activated:Connect(function()
 		boardScale.Scale = 0.9
 		Theme.tween(boardScale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
-		MovementController.ToggleHoverboard()
+		MovementController.ToggleBroom()
 	end)
-	sprint.Activated:Connect(function()
-		MovementController.SetSprint(not state.Sprinting)
+	-- Hold to dive (touch / mouse); Ctrl and L3 work from the controller.
+	descend.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			MovementController.SetDescending(true)
+			refresh()
+		end
+	end)
+	descend.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			MovementController.SetDescending(false)
+			refresh()
+		end
 	end)
 	dash.Activated:Connect(function()
 		MovementController.Dash()

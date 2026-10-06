@@ -1,19 +1,27 @@
 -- CombatAnim
--- Full-body combat animation for R15 fighters, built procedurally from
--- keyframed poses (no animation assets): wind-up, strike and follow-through
--- for every melee style and combo hit, and a cast motion for every skill.
+-- Full-body procedural animation for every fighter, built from keyframed
+-- poses (no animation assets), in three layers:
+--   * movement: riding the broom, the airborne rise / fall and a landing
+--     squash, worked out from each character's state on every client;
+--   * actions: wind-up, strike and follow-through for every melee style and
+--     combo hit, a motion for every skill, charges that hold until released,
+--     the dash lunge and the double-jump flip; a stun cuts them short;
+--   * the guard pose while blocking.
 -- Poses layer on top of the walk / idle animation by offsetting each joint's
 -- Motor6D.C0 (the Animator only drives Motor6D.Transform), and blend in and
--- out smoothly. Holding block raises a guard pose.
+-- out smoothly. R15 rigs get every joint; R6 rigs get the same poses folded
+-- onto their six joints.
 --
--- Played on every client from the combat effects, so everyone sees the same
--- motion; your own swings start instantly (predicted).
+-- Played on every client from the combat / movement effects, so everyone sees
+-- the same motion; your own actions start instantly (predicted).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local CombatConfig = require(ReplicatedStorage:WaitForChild("CombatConfig"))
+local MovementConfig = require(ReplicatedStorage:WaitForChild("MovementConfig"))
 
 local STATUS = CombatConfig.Status
 
@@ -46,7 +54,7 @@ local JOINTS = {
 --   Root: -pitch leans the whole body forward. Waist: +yaw twists left.
 type Pose = { [string]: { number } }
 type Key = { T: number, Pose: Pose }
-type Anim = { Duration: number, Keys: { Key } }
+type Anim = { Duration: number, Keys: { Key }, HoldAt: number?, Spin: { Turns: number, From: number, To: number }? }
 
 local function mirror(pose: Pose): Pose
 	local out = {}
@@ -241,7 +249,7 @@ A.SlamLeap = swing(0.65, {
 }, {
 	RShoulder = { 30, 0, 30 }, LShoulder = { 30, 0, -30 }, Root = { -30 }, RHip = { 60 }, RKnee = { -90 }, LHip = { -10 }, LKnee = { -60 },
 }, 0.75)
-A.NovaCharge = { Duration = 0.6, Keys = {
+A.NovaCharge = { Duration = 0.6, HoldAt = 0.6, Keys = {
 	{ T = 0, Pose = {} },
 	{ T = 0.6, Pose = { RShoulder = { 80, 55 }, LShoulder = { 80, -55 }, RElbow = { -90 }, LElbow = { -90 }, Root = { -12 }, RHip = { 35 }, RKnee = { -60 }, LHip = { 30 }, LKnee = { -55 }, Neck = { -15 } } },
 	{ T = 1, Pose = { RShoulder = { 80, 55 }, LShoulder = { 80, -55 }, RElbow = { -90 }, LElbow = { -90 }, Root = { -12 }, RHip = { 35 }, RKnee = { -60 }, LHip = { 30 }, LKnee = { -55 }, Neck = { -15 } } },
@@ -280,16 +288,120 @@ A.Transform = { Duration = 1.1, Keys = {
 local BLOCK_POSE: Pose = { RShoulder = { 85, 55 }, LShoulder = { 85, -55 }, RElbow = { -100 }, LElbow = { -100 }, Root = { -6 }, RHip = { 15 }, RKnee = { -20 }, LKnee = { -15 }, Neck = { -8 } }
 
 --------------------------------------------------------------------------------
+-- Movement
+--------------------------------------------------------------------------------
+
+-- Dash (Q): throw the body forward with the arms swept back, hold the lunge
+-- through the burst, then brake on a planted front foot.
+local DASH_LUNGE: Pose = {
+	Root = { -40 }, Waist = { -8 }, Neck = { 24 },
+	RShoulder = { -65, 0, 28 }, LShoulder = { -65, 0, -28 }, RElbow = { -20 }, LElbow = { -20 },
+	RHip = { 55 }, RKnee = { -45 }, LHip = { -45 }, LKnee = { -30 },
+}
+A.Dash = { Duration = 0.55, Keys = {
+	{ T = 0, Pose = {} },
+	{ T = 0.1, Pose = DASH_LUNGE },
+	{ T = 0.42, Pose = DASH_LUNGE },
+	{ T = 0.62, Pose = {
+		Root = { 16 }, Waist = { 6 }, Neck = { -8 }, Drop = { 0.35 },
+		RShoulder = { 45, 0, 35 }, LShoulder = { 25, 0, -40 }, RElbow = { -30 }, LElbow = { -40 },
+		RHip = { 60 }, RKnee = { -25 }, LHip = { -18 }, LKnee = { -55 },
+	} },
+	{ T = 1, Pose = {} },
+} }
+
+-- Double jump: tuck into a forward flip (the spin is added on top, see Spin).
+local TUCK: Pose = {
+	RHip = { 105 }, LHip = { 105 }, RKnee = { -125 }, LKnee = { -125 },
+	RShoulder = { 70, 0, 20 }, LShoulder = { 70, 0, -20 }, RElbow = { -70 }, LElbow = { -70 },
+	Neck = { -20 }, Waist = { -12 },
+}
+A.Flip = { Duration = 0.55, Spin = { Turns = 1, From = 0.05, To = 0.85 }, Keys = {
+	{ T = 0, Pose = {} },
+	{ T = 0.15, Pose = TUCK },
+	{ T = 0.7, Pose = TUCK },
+	{ T = 1, Pose = { RShoulder = { 40, 0, 50 }, LShoulder = { 40, 0, -50 }, RHip = { 20 }, LHip = { 10 }, RKnee = { -30 }, LKnee = { -20 } } },
+} }
+
+-- Airborne layer (blended by vertical speed): a knees-up rise, a spread fall.
+local RISE_POSE: Pose = {
+	RHip = { 55 }, RKnee = { -80 }, LHip = { 20 }, LKnee = { -35 },
+	RShoulder = { 35, 0, 25 }, LShoulder = { 25, 0, -30 }, RElbow = { -30 }, LElbow = { -30 }, Neck = { 6 },
+}
+local FALL_POSE: Pose = {
+	RHip = { 18, 0, 10 }, LHip = { -10, 0, -12 }, RKnee = { -35 }, LKnee = { -15 },
+	RShoulder = { 30, 0, 70 }, LShoulder = { 30, 0, -70 }, RElbow = { -25 }, LElbow = { -25 }, Neck = { -12 }, Root = { -6 },
+}
+-- Landing: a quick knee-bend that soaks up the fall.
+local LAND_POSE: Pose = {
+	Drop = { 0.9 }, Root = { -16 }, Waist = { -6 }, Neck = { 10 },
+	RHip = { 55 }, RKnee = { -85 }, LHip = { 45 }, LKnee = { -75 },
+	RShoulder = { 20, 0, 35 }, LShoulder = { 20, 0, -35 }, RElbow = { -30 }, LElbow = { -30 },
+}
+
+-- Riding the broom, the classic way: astride the shaft facing where it flies,
+-- legs either side with the shins tucked back, both hands on the shaft ahead
+-- and the body leaning into the flight.
+local BROOM_POSE: Pose = {
+	Root = { -20 }, Waist = { -6 }, Neck = { 22 },
+	RHip = { 82, -14, 16 }, LHip = { 82, 14, -16 }, RKnee = { -100 }, LKnee = { -100 },
+	RShoulder = { 58, 26 }, LShoulder = { 58, -26 }, RElbow = { -22 }, LElbow = { -22 },
+}
+
+--------------------------------------------------------------------------------
 -- Playback
 --------------------------------------------------------------------------------
 
-type State = { Anim: Anim?, Start: number, Weight: { [string]: Vector3 }, Block: number }
+-- R6 fallback: the six R6 joints (the waist, elbows and knees fold into them).
+local R6_JOINTS = {
+	Root = { "HumanoidRootPart", "RootJoint" },
+	Neck = { "Torso", "Neck" },
+	RShoulder = { "Torso", "Right Shoulder" },
+	LShoulder = { "Torso", "Left Shoulder" },
+	RHip = { "Torso", "Right Hip" },
+	LHip = { "Torso", "Left Hip" },
+	Grip = JOINTS.Grip,
+}
+-- joint -> { R6 joint, how much of its pitch to fold in }
+local R6_FOLD = {
+	Waist = { "Root", 1 },
+	RElbow = { "RShoulder", -0.45 },
+	LElbow = { "LShoulder", -0.45 },
+	RKnee = { "RHip", 0.35 },
+	LKnee = { "LHip", 0.35 },
+}
+
+-- Pose channels: every joint plus "Drop" (studs the body sinks, landings).
+local CHANNELS: { string } = { "Drop" }
+for joint in JOINTS do
+	table.insert(CHANNELS, joint)
+end
+
+type State = {
+	Anim: Anim?,
+	Start: number,
+	HoldUntil: number, -- the anim freezes at its HoldAt key until then
+	Weight: { [string]: Vector3 },
+	Block: number,
+	Air: number, -- airborne layer weight
+	Ride: number, -- broom layer weight
+	WasAirborne: boolean,
+	AirSince: number,
+	LastFall: number, -- vertical speed while airborne (for landings)
+	LandStart: number,
+	LandPower: number,
+	R6: boolean?,
+}
 
 local states: { [Model]: State } = setmetatable({}, { __mode = "k" }) :: any
 local baseC0: { [Instance]: CFrame } = setmetatable({}, { __mode = "k" }) :: any
 
 local function ease(t: number): number
 	return t * t * (3 - 2 * t)
+end
+
+local function vec(p: { number }?): Vector3
+	return if p then Vector3.new(p[1] or 0, p[2] or 0, p[3] or 0) else Vector3.zero
 end
 
 local function sample(anim: Anim, t: number): { [string]: Vector3 }
@@ -305,20 +417,46 @@ local function sample(anim: Anim, t: number): { [string]: Vector3 }
 	local span = math.max(1e-3, k2.T - k1.T)
 	local u = ease(math.clamp((a - k1.T) / span, 0, 1))
 	local out: { [string]: Vector3 } = {}
-	for joint in JOINTS do
+	for _, joint in CHANNELS do
 		local p1 = k1.Pose[joint]
 		local p2 = k2.Pose[joint]
 		if p1 or p2 then
-			local v1 = if p1 then Vector3.new(p1[1] or 0, p1[2] or 0, p1[3] or 0) else Vector3.zero
-			local v2 = if p2 then Vector3.new(p2[1] or 0, p2[2] or 0, p2[3] or 0) else Vector3.zero
-			out[joint] = v1:Lerp(v2, u)
+			out[joint] = vec(p1):Lerp(vec(p2), u)
 		end
 	end
 	return out
 end
 
--- Plays animation `name` on a character (any client's character).
-function CombatAnim.Play(character: Instance?, name: string)
+local function newState(): State
+	return {
+		Anim = nil,
+		Start = 0,
+		HoldUntil = 0,
+		Weight = {},
+		Block = 0,
+		Air = 0,
+		Ride = 0,
+		WasAirborne = false,
+		AirSince = 0,
+		LastFall = 0,
+		LandStart = -10,
+		LandPower = 0,
+	}
+end
+
+local function stateOf(character: Model): State
+	local state = states[character]
+	if not state then
+		state = newState()
+		states[character] = state
+	end
+	return state
+end
+
+-- Plays animation `name` on a character (any client's character). With
+-- `hold` (seconds), an anim that has a HoldAt key freezes there that long
+-- (charging) before finishing; CombatAnim.Stop cuts it short.
+function CombatAnim.Play(character: Instance?, name: string, hold: number?)
 	if typeof(character) ~= "Instance" or not character:IsA("Model") then
 		return
 	end
@@ -326,21 +464,61 @@ function CombatAnim.Play(character: Instance?, name: string)
 	if not anim then
 		return
 	end
-	local state = states[character]
-	if not state then
-		state = { Anim = nil, Start = 0, Weight = {}, Block = 0 }
-		states[character] = state
-	end
+	local state = stateOf(character)
 	state.Anim = anim
 	state.Start = os.clock()
+	state.HoldUntil = if hold then os.clock() + hold else 0
+end
+
+-- Ends whatever action is playing; the body eases back to normal.
+function CombatAnim.Stop(character: Instance?)
+	if typeof(character) == "Instance" and character:IsA("Model") then
+		local state = states[character]
+		if state then
+			state.Anim = nil
+		end
+	end
 end
 
 function CombatAnim.Has(name: string): boolean
 	return A[name] ~= nil
 end
 
-local function motorOf(character: Model, joint: string): any
-	local spec = JOINTS[joint]
+-- Every animation name (for tools/anim-check.sh).
+function CombatAnim.List(): { string }
+	local names = {}
+	for name in A do
+		table.insert(names, name)
+	end
+	table.sort(names)
+	return names
+end
+
+-- Playing time of the anim, freezing at its HoldAt key while held.
+local function animTime(state: State, anim: Anim, clock: number): number
+	local t = clock - state.Start
+	local holdAt = (anim :: any).HoldAt
+	if holdAt and state.HoldUntil > 0 then
+		local at = holdAt * anim.Duration
+		if t > at then
+			if clock < state.HoldUntil then
+				return at
+			end
+			-- Resume from the hold point once it is over.
+			local resumed = at + (clock - state.HoldUntil)
+			state.Start = clock - resumed
+			state.HoldUntil = 0
+			return resumed
+		end
+	end
+	return t
+end
+
+local function motorOf(character: Model, joint: string, r6: boolean): any
+	local spec = if r6 then R6_JOINTS[joint] else JOINTS[joint]
+	if not spec then
+		return nil
+	end
 	if spec[3] then
 		local weapon = character:FindFirstChild(spec[1])
 		local handle = weapon and weapon:FindFirstChild(spec[2])
@@ -352,28 +530,130 @@ local function motorOf(character: Model, joint: string): any
 	return if m and m:IsA("Motor6D") then m else nil
 end
 
-local function apply(character: Model, state: State, dt: number)
-	local target: { [string]: Vector3 } = {}
-	if state.Anim then
-		local t = os.clock() - state.Start
-		if t >= state.Anim.Duration then
-			state.Anim = nil
-		else
-			target = sample(state.Anim, t)
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function addPose(target: { [string]: Vector3 }, pose: Pose, weight: number)
+	if weight <= 0.001 then
+		return
+	end
+	for joint, v in pose do
+		target[joint] = (target[joint] or Vector3.zero) + vec(v) * weight
+	end
+end
+
+-- The movement layer: broom seat, airborne rise / fall, landing squash.
+local function locomotion(character: Model, state: State, dt: number, clock: number): { [string]: Vector3 }
+	local out: { [string]: Vector3 } = {}
+	local root = character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not root or not root:IsA("BasePart") or not humanoid then
+		return out
+	end
+	local riding = character:GetAttribute(MovementConfig.BroomAttribute) == true
+	local beast = character:GetAttribute(STATUS.Beast) ~= nil
+	state.Ride += ((if riding then 1 else 0) - state.Ride) * math.min(1, dt * 10)
+	addPose(out, BROOM_POSE, state.Ride)
+
+	-- Airborne: nothing under the feet (a short ray; works for everyone's
+	-- characters, not only the local one).
+	local airborne = false
+	local vy = root.AssemblyLinearVelocity.Y
+	if not riding and not beast and humanoid.Health > 0 then
+		local legs = if humanoid.RigType == Enum.HumanoidRigType.R15 then humanoid.HipHeight else 2
+		rayParams.FilterDescendantsInstances = { character }
+		local hit = Workspace:Raycast(root.Position, Vector3.new(0, -(root.Size.Y / 2 + legs + 1.2), 0), rayParams)
+		airborne = hit == nil and math.abs(vy) > 1.5
+	end
+	if airborne and not state.WasAirborne then
+		state.AirSince = clock
+	end
+	if airborne then
+		state.LastFall = vy
+	elseif state.WasAirborne then
+		-- Touched down after a real fall: squash.
+		local airTime = clock - state.AirSince
+		if state.LastFall < -22 or airTime > 0.55 then
+			state.LandStart = clock
+			state.LandPower = math.clamp(-state.LastFall / 75, 0.45, 1)
 		end
 	end
-	-- Guard layer
+	state.WasAirborne = airborne
+	state.Air += ((if airborne then 1 else 0) - state.Air) * math.min(1, dt * 9)
+	if state.Air > 0.01 then
+		-- Rising -> tucked knees; falling -> spread arms and legs.
+		local fall = math.clamp((-vy + 6) / 30, 0, 1)
+		addPose(out, RISE_POSE, state.Air * (1 - fall) * 0.85)
+		addPose(out, FALL_POSE, state.Air * fall)
+	end
+	local land = (clock - state.LandStart) / 0.34
+	if land >= 0 and land < 1 then
+		addPose(out, LAND_POSE, math.sin(land * math.pi) * state.LandPower)
+	end
+	return out
+end
+
+local function apply(character: Model, state: State, dt: number)
+	local clock = os.clock()
+	local action: { [string]: Vector3 } = {}
+	local spin = 0
+	local anim = state.Anim
+	-- A stun (or shattering) cuts any action short.
+	if anim and (character:GetAttribute(STATUS.Shattered) == true or (character:GetAttribute(STATUS.StunnedUntil) or 0) > Workspace:GetServerTimeNow()) then
+		state.Anim = nil
+		anim = nil
+	end
+	if anim then
+		local t = animTime(state, anim, clock)
+		if t >= anim.Duration then
+			state.Anim = nil
+		else
+			action = sample(anim, t)
+			local s = (anim :: any).Spin
+			if s then
+				local u = math.clamp((t / anim.Duration - s.From) / (s.To - s.From), 0, 1)
+				spin = -math.pi * 2 * s.Turns * ease(u)
+			end
+		end
+	end
+
+	-- Layers: movement underneath, the action on top (it owns the joints it
+	-- poses), the guard while blocking.
+	local target = locomotion(character, state, dt, clock)
+	for joint, v in action do
+		target[joint] = v
+	end
 	local blocking = character:GetAttribute(STATUS.Blocking) == true
 	state.Block += ((if blocking then 1 else 0) - state.Block) * math.min(1, dt * 12)
 	if state.Block > 0.01 then
 		for joint, v in BLOCK_POSE do
 			local current = target[joint] or Vector3.zero
-			target[joint] = current:Lerp(Vector3.new(v[1] or 0, v[2] or 0, v[3] or 0), state.Block)
+			target[joint] = current:Lerp(vec(v), state.Block)
 		end
 	end
-	-- Ease every joint toward its target (smooth in and out).
+
+	-- R6: fold the joints it lacks into the ones it has.
+	local r6 = state.R6
+	if r6 == nil then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		r6 = humanoid ~= nil and humanoid.RigType == Enum.HumanoidRigType.R6
+		state.R6 = r6
+	end
+	if r6 then
+		for joint, fold in R6_FOLD do
+			local v = target[joint]
+			if v then
+				local into = fold[1]
+				local amount = if joint == "Waist" then v else Vector3.new(v.X * fold[2], 0, 0)
+				target[into] = (target[into] or Vector3.zero) + amount
+				target[joint] = nil
+			end
+		end
+	end
+
+	-- Ease every channel toward its target (smooth in and out).
 	local blend = math.min(1, dt * 22)
-	for joint in JOINTS do
+	for _, joint in CHANNELS do
 		local goal = target[joint] or Vector3.zero
 		local current = state.Weight[joint] or Vector3.zero
 		local nextValue = current:Lerp(goal, blend)
@@ -381,22 +661,48 @@ local function apply(character: Model, state: State, dt: number)
 			nextValue = Vector3.zero
 		end
 		state.Weight[joint] = nextValue
-		local motor = motorOf(character, joint)
+	end
+
+	for _, joint in CHANNELS do
+		if joint == "Drop" then
+			continue
+		end
+		local motor = motorOf(character, joint, r6)
 		if motor then
 			local base = baseC0[motor]
 			if not base then
 				base = motor.C0
 				baseC0[motor] = base
 			end
-			if nextValue == Vector3.zero then
+			local v = state.Weight[joint] or Vector3.zero
+			local drop = if joint == "Root" then (state.Weight.Drop or Vector3.zero).X else 0
+			local spinning = joint == "Root" and spin ~= 0
+			if v == Vector3.zero and drop == 0 and not spinning then
 				if motor.C0 ~= base then
 					motor.C0 = base
 				end
 			else
-				motor.C0 = base * CFrame.fromEulerAnglesYXZ(math.rad(nextValue.X), math.rad(nextValue.Y), math.rad(nextValue.Z))
+				-- Rotate in the parent part's space about the joint, so the same
+				-- pose reads the same on R15 and R6 joints. Elbows hinge forward.
+				local pitch = if joint == "RElbow" or joint == "LElbow" then -v.X else v.X
+				local rotation = CFrame.fromEulerAnglesYXZ(math.rad(pitch), math.rad(v.Y), math.rad(v.Z))
+				local c0 = CFrame.new(base.Position) * rotation * base.Rotation
+				if drop ~= 0 then
+					c0 = CFrame.new(0, -drop, 0) * c0
+				end
+				if spinning then
+					-- The flip turns the whole body about the root's centre.
+					c0 = CFrame.Angles(spin, 0, 0) * c0
+				end
+				motor.C0 = c0
 			end
 		end
 	end
+end
+
+-- Characters with something to show: an action, a guard, or movement.
+local function wantsState(character: Model): boolean
+	return character:GetAttribute(STATUS.Blocking) == true or character:FindFirstChild("HumanoidRootPart") ~= nil
 end
 
 function CombatAnim.Start()
@@ -405,9 +711,8 @@ function CombatAnim.Start()
 			local character = player.Character
 			if character then
 				local state = states[character]
-				if not state and character:GetAttribute(STATUS.Blocking) == true then
-					state = { Anim = nil, Start = 0, Weight = {}, Block = 0 }
-					states[character] = state
+				if not state and wantsState(character) then
+					state = stateOf(character)
 				end
 				if state then
 					apply(character, state, dt)

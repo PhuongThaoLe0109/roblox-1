@@ -8,7 +8,7 @@ local TweenService = game:GetService("TweenService")
 
 local Theme = {}
 
-Theme.GameTitle = "Prism Shores" -- working title; rename freely
+Theme.GameTitle = "Universal Gems"
 
 local rgb = Color3.fromRGB
 
@@ -44,7 +44,7 @@ Theme.Fonts = {
 local MERRIWEATHER = "rbxasset://fonts/families/Merriweather.json"
 local NUNITO = "rbxasset://fonts/families/Nunito.json"
 Theme.Faces = {
-	Display = Font.new(MERRIWEATHER, Enum.FontWeight.Black, Enum.FontStyle.Italic),
+	Display = Font.new(MERRIWEATHER, Enum.FontWeight.Heavy, Enum.FontStyle.Italic),
 	Title = Font.new(MERRIWEATHER, Enum.FontWeight.Bold),
 	Odds = Font.new("rbxasset://fonts/families/Michroma.json"),
 	Heavy = Font.new(NUNITO, Enum.FontWeight.Heavy),

@@ -160,7 +160,7 @@ function Lobby.Build(map: Instance, rng: Random, title: string)
 	text.Size = UDim2.fromScale(1, 1)
 	text.Text = title
 	text.TextScaled = true
-	text.FontFace = Font.new("rbxasset://fonts/families/Merriweather.json", Enum.FontWeight.Black, Enum.FontStyle.Italic)
+	text.FontFace = Font.new("rbxasset://fonts/families/Merriweather.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic)
 	text.TextColor3 = Color3.fromRGB(255, 240, 255)
 	local gradient = Instance.new("UIGradient")
 	gradient.Color = ColorSequence.new({
