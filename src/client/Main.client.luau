@@ -9,25 +9,53 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local Auras = require(script.Parent:WaitForChild("Aura"):WaitForChild("Auras"))
-local ClientData = require(script.Parent:WaitForChild("ClientData"))
-local MapFX = require(script.Parent:WaitForChild("MapFX"))
-local Toon = require(script.Parent:WaitForChild("Toon"))
-local MovementController = require(script.Parent:WaitForChild("Movement"):WaitForChild("MovementController"))
-local CombatFolder = script.Parent:WaitForChild("Combat")
-local BeastFX = require(CombatFolder:WaitForChild("BeastFX"))
-local CombatAnim = require(CombatFolder:WaitForChild("CombatAnim"))
-local CombatFX = require(CombatFolder:WaitForChild("CombatFX"))
-local CombatController = require(CombatFolder:WaitForChild("CombatController"))
-local Overheads = require(CombatFolder:WaitForChild("Overheads"))
-local UI = script.Parent:WaitForChild("UI")
-local RollReveal = require(UI:WaitForChild("RollReveal"))
-local Announcements = require(UI:WaitForChild("Announcements"))
-local Inventory = require(UI:WaitForChild("Inventory"))
-local LobbyHud = require(UI:WaitForChild("LobbyHud"))
-local MovementHud = require(UI:WaitForChild("MovementHud"))
-local CombatHud = require(UI:WaitForChild("CombatHud"))
-local SkillGuide = require(UI:WaitForChild("SkillGuide"))
+-- Every module is loaded and started on its own: if one of them fails, the
+-- error names it in the Output and the rest of the game (and the UI) still
+-- comes up instead of the whole client stopping.
+local function load(...: string): any
+	local path = { ... }
+	local ok, result = pcall(function()
+		local node: Instance = script.Parent
+		for _, name in path do
+			node = node:WaitForChild(name, 15) :: Instance
+			assert(node, `missing {name}`)
+		end
+		return require(node :: ModuleScript)
+	end)
+	if not ok then
+		warn(`[Main] could not load {table.concat(path, ".")}: {result}`)
+		return nil
+	end
+	return result
+end
+
+local function safe(label: string, fn: any, ...)
+	if type(fn) ~= "function" then
+		return
+	end
+	local ok, err = pcall(fn, ...)
+	if not ok then
+		warn(`[Main] {label} failed: {err}`)
+	end
+end
+
+local Toon = load("Toon")
+local Auras = load("Aura", "Auras")
+local ClientData = load("ClientData")
+local MapFX = load("MapFX")
+local MovementController = load("Movement", "MovementController")
+local BeastFX = load("Combat", "BeastFX")
+local CombatAnim = load("Combat", "CombatAnim")
+local CombatFX = load("Combat", "CombatFX")
+local CombatController = load("Combat", "CombatController")
+local Overheads = load("Combat", "Overheads")
+local RollReveal = load("UI", "RollReveal")
+local Announcements = load("UI", "Announcements")
+local Inventory = load("UI", "Inventory")
+local LobbyHud = load("UI", "LobbyHud")
+local MovementHud = load("UI", "MovementHud")
+local CombatHud = load("UI", "CombatHud")
+local SkillGuide = load("UI", "SkillGuide")
 
 local screen = Instance.new("ScreenGui")
 screen.Name = "PrismUI"
@@ -55,23 +83,23 @@ local context = {
 	Toast = function(_text: string, _kind: string?) end,
 	ToggleInventory = function(_open: boolean?) end,
 	SetLobbyVisible = function(_visible: boolean) end,
-	PreviewAura = Auras.SetPreview, -- try a gem's aura on before equipping it
+	PreviewAura = if Auras then Auras.SetPreview else function(_gemId: string?) end, -- try a gem's aura on before equipping it
 	ToggleSkillGuide = function(_open: boolean?) end,
 	InLobby = function(): boolean
 		return true -- the whole world is open: menus work everywhere
 	end,
 }
 
-Toon.Start()
-MapFX.Start()
-MovementController.Start()
-ClientData.Start()
-Auras.Start()
-CombatController.Start()
-BeastFX.Start(CombatFX)
-CombatAnim.Start()
-Overheads.Start()
-RollReveal.Init(screen)
+safe("Toon.Start", Toon and Toon.Start)
+safe("MapFX.Start", MapFX and MapFX.Start)
+safe("MovementController.Start", MovementController and MovementController.Start)
+safe("ClientData.Start", ClientData and ClientData.Start)
+safe("Auras.Start", Auras and Auras.Start)
+safe("CombatController.Start", CombatController and CombatController.Start)
+safe("BeastFX.Start", BeastFX and BeastFX.Start, CombatFX)
+safe("CombatAnim.Start", CombatAnim and CombatAnim.Start)
+safe("Overheads.Start", Overheads and Overheads.Start)
+safe("RollReveal.Init", RollReveal and RollReveal.Init, screen)
 
 for _, entry in {
 	{ "Announcements", Announcements },
@@ -81,8 +109,10 @@ for _, entry in {
 	{ "CombatHud", CombatHud },
 	{ "SkillGuide", SkillGuide },
 } do
-	local ok, err = pcall(entry[2].Init, screen, context)
-	if not ok then
-		warn(`[UI] {entry[1]} failed to initialise: {err}`)
+	if entry[2] then
+		local ok, err = pcall(entry[2].Init, screen, context)
+		if not ok then
+			warn(`[UI] {entry[1]} failed to initialise: {err}`)
+		end
 	end
 end
