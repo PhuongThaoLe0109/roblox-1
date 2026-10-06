@@ -48,6 +48,7 @@ MovementController.State = {
 	DashReadyAt = 0, -- os.clock()
 	BroomReadyAt = 0, -- os.clock(): when the broom can be summoned again
 	Descending = false, -- held DESCEND (touch / gamepad)
+	FrozenUntil = 0, -- os.clock(): held still (ultimate cutscenes)
 }
 local state = MovementController.State
 
@@ -92,7 +93,9 @@ local function applySpeed()
 		speed = GemKits.Beasts[beast].Speed * MovementConfig.BeastSpeedScale
 	end
 	local jump = 7.2
-	if character:GetAttribute(STATUS.Shattered) == true or active(STATUS.StunnedUntil) then
+	if os.clock() < state.FrozenUntil then
+		speed, jump = 0, 0
+	elseif character:GetAttribute(STATUS.Shattered) == true or active(STATUS.StunnedUntil) then
 		speed, jump = SPEEDS.Stunned, 0
 	elseif active(STATUS.RootedUntil) then
 		speed, jump = SPEEDS.Rooted, 0
@@ -514,6 +517,11 @@ function MovementController.ToggleBroom()
 	task.delay(BROOM.ToggleCooldown, function()
 		pendingBroom = false
 	end)
+end
+
+-- Holds the character still for `seconds` (cutscenes).
+function MovementController.Freeze(seconds: number)
+	state.FrozenUntil = math.max(state.FrozenUntil, os.clock() + seconds)
 end
 
 -- Hold to dive while riding (touch / gamepad).

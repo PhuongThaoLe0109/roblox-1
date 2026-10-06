@@ -14,6 +14,7 @@
 -- root. The client animates them locally (it only changes their C0).
 
 local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CombatConfig = require(ReplicatedStorage:WaitForChild("CombatConfig"))
@@ -135,7 +136,8 @@ function BeastService.Revert(character: Model)
 	showBody(character)
 	local root = character:FindFirstChild("HumanoidRootPart")
 	if root and root:IsA("BasePart") then
-		CombatService.FX("TransformEnd", { Caster = character, Position = root.Position })
+		local color, accent = CombatService.ColorsOf(Players:GetPlayerFromCharacter(character))
+		CombatService.FX("TransformEnd", { Caster = character, Position = root.Position, Color = color, Accent = accent })
 	end
 end
 
@@ -157,9 +159,13 @@ function BeastService.Transform(ctx)
 	end
 
 	CombatService.FX("Transform", { Caster = character, Beast = skill.Beast, Name = skill.BeastName, Position = ctx.Root.Position, Color = color, Accent = accent, Element = ctx.Kit.Element })
-	CombatService.Extend(character, STATUS.InvulnerableUntil, 0.8)
-	CombatService.Extend(character, STATUS.BusyUntil, 0.8)
-	task.wait(0.45)
+	-- The transformation cutscene: untouchable and unable to act until it
+	-- ends (the caster's client holds them still); the beast takes shape
+	-- partway through.
+	local cut = CombatConfig.Cutscene
+	CombatService.Extend(character, STATUS.InvulnerableUntil, cut.Transform)
+	CombatService.Extend(character, STATUS.BusyUntil, cut.Transform)
+	task.wait(cut.BeastAt)
 	if humanoid.Health <= 0 or character.Parent == nil then
 		return
 	end

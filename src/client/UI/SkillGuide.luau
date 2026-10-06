@@ -13,6 +13,7 @@ local GemKits = require(ReplicatedStorage:WaitForChild("GemKits"))
 local CombatController = require(script.Parent.Parent:WaitForChild("Combat"):WaitForChild("CombatController"))
 local GemArt = require(script.Parent:WaitForChild("GemArt"))
 local Theme = require(script.Parent:WaitForChild("Theme"))
+local Cutscene = require(script.Parent.Parent:WaitForChild("Combat"):WaitForChild("Cutscene"))
 
 local C = Theme.Colors
 local player = Players.LocalPlayer
@@ -189,6 +190,63 @@ function SkillGuide.Init(screen: ScreenGui, context)
 		})
 	end
 
+	-- A settings card with an ON / OFF switch on the right.
+	local function toggle(name: string, description: string, get: () -> boolean, set: (boolean) -> ())
+		order += 1
+		local card = Theme.new("Frame", {
+			BackgroundColor3 = C.PanelLight,
+			BackgroundTransparency = 0.25,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, -12, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			LayoutOrder = order,
+			ZIndex = 52,
+			Parent = list,
+		})
+		Theme.corner(10).Parent = card
+		Theme.stroke(Color3.new(1, 1, 1), 1.5, 0.4).Parent = card
+		Theme.padding(10).Parent = card
+		Theme.label({
+			Text = name,
+			FontFace = Theme.Faces.Heavy,
+			TextSize = 18,
+			TextColor3 = C.Text,
+			Size = UDim2.new(1, -120, 0, 22),
+			ZIndex = 53,
+			Parent = card,
+		})
+		Theme.label({
+			Text = description,
+			FontFace = Theme.Faces.Body,
+			TextSize = 14,
+			TextColor3 = C.SubText,
+			TextWrapped = true,
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Position = UDim2.fromOffset(0, 24),
+			Size = UDim2.new(1, -120, 0, 18),
+			ZIndex = 53,
+			Parent = card,
+		})
+		local switch = Theme.button("", C.Success, {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, 0, 0, 4),
+			Size = UDim2.fromOffset(96, 38),
+			TextSize = 16,
+			ZIndex = 54,
+			Parent = card,
+		})
+		local function paint()
+			local on = get()
+			switch.Text = if on then "ON" else "OFF"
+			switch.BackgroundColor3 = if on then C.Success else C.Muted
+		end
+		paint()
+		switch.Activated:Connect(function()
+			set(not get())
+			paint()
+		end)
+	end
+
 	local function rebuild()
 		for _, child in list:GetChildren() do
 			if child:IsA("GuiObject") then
@@ -241,6 +299,11 @@ function SkillGuide.Init(screen: ScreenGui, context)
 		for _, control in CONTROLS do
 			row("", "", control[1], control[2], "")
 		end
+
+		section("Settings")
+		toggle("Ultimate cutscenes", "A short cinematic when you transform (G) or open your domain (T). You can't be hit while it plays.", function()
+			return Cutscene.Enabled
+		end, Cutscene.SetEnabled)
 	end
 	CombatController.KitChanged:Connect(function()
 		if panel.Visible then

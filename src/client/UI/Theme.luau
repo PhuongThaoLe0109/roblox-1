@@ -36,7 +36,7 @@ Theme.Fonts = {
 }
 
 -- Typography. Roblox font families (no custom assets needed):
---   Display  Merriweather Black Italic: gem names, big reveals
+--   Display  Merriweather Heavy Italic: gem names, big reveals
 --   Title    Merriweather Bold: panel titles
 --   Odds     Michroma: "1 in N" lines
 --   Heavy    Nunito Heavy: buttons, numbers

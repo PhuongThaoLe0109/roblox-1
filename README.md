@@ -37,19 +37,30 @@ Every gem has its own kit, and it grows with rarity:
 
 - **Melee weapons**: Crystal Blade, Prism Greatsword, Twin Facets (daggers), Geode Fists, Spire Lance (spear), Moon Scythe,
   Monolith Hammer, Ribbon Whip, Gale Fans. Each has its own combo length, reach, arc and finisher. Weapons are oversized
-  (×1.45) with wide arcs, and every swing plays its own full-body procedural animation (wind-up, strike, follow-through).
+  (×1.45) with wide arcs, and every combo hit plays its own full-body procedural animation: a slow wind-up, a strike
+  that snaps through, a follow-through past the pose and a settle. Finishers are the heaviest (leaping, whirling, or
+  crashing down), and the slash trail starts exactly as the strike does.
 - **Skill archetypes** (24): volleys, piercing lances, homing orbs, boomerang discs, crystal rain, meteors, launchers, rushes,
   cyclones, quakes, flurries, novas, spire lines, vortexes, rays, prisons, chain lightning, blinks, aegis shields, blooms,
   frost fields (slow), shackles (root), hooks (pull), hexes (take more damage). Each gem gets a mix picked from its
   element (the same element as its aura), named after it ("Umbral Vortex", "Glacial Prison", ...). Cooldowns are short
   (`GemKits.CooldownScale` = 0.5) and areas are wide (`GemKits.AreaScale` = 1.35); big hits detonate with a white-hot
-  core, a shockwave dome, double floor rings, a scorch mark, embers and screen shake. Every cast has a body pose.
+  core, a shockwave dome, double floor rings, a scorch mark, embers and screen shake. Every archetype has its own body
+  motion (a javelin throw for Lance, a discus throw for Boomerang, both hands to the sky for Rain, a hand raised and
+  dragged down for Meteor, a kneeling slam for Trap, a whirl for Spin, a gather-and-burst for Nova, ...). Skills with
+  a charge (Nova, Meteor, Beam, Domain, Transformation) hold a trembling charge pose while light is drawn into the body
+  and the aura surges; a stun cancels the charge cleanly.
 - **Beasts**: Prism Golem, Pyre Wyrm, Glacier Stag, Umbral Maw, Thunder Roc, Dream Moth, Solar Lion, Star Koi. While
   transformed your strikes become the beast's own attack (the lion swipes and pounces, the golem smashes, the stag sweeps
   its antlers, the roc buffets, ...), you take less damage and move at the beast's speed. Beasts are skeletal rigs of rounded crystal bodies
   (`BeastModels`), animated on the client with gaits that follow their speed, breathing, a roar and attack poses.
+  Transforming plays a short **cutscene** for the caster (letterbox, title, close-up, orbit as the body cracks into
+  crystal, a flash as the beast forms and roars, slow-motion effects); the caster can't be hit or act during it
+  (`CombatConfig.Cutscene`), and everyone else sees it happen in the world. When the form ends the beast bursts apart
+  and you reform crouched in a column of light. Cutscenes can be switched off in the skills guide (H).
 - **Domains**: 8 dimensions (one per element, e.g. "Event Horizon", "Crucible of Embers"). Walls of light, a tinted sky, and
   foes inside are slowed, take damage every half second and are pushed back if they try to leave; your cooldowns run faster.
+  Opening one plays a 1.5 s intro for the caster: the camera rises to watch the dome come down under the domain's name.
 - Damage is close between rarities (power ×1.00 to ×1.20): rarer gems win by having more tools.
 - Block (F) from the front with a guard meter, dash (Q) with i-frames, stuns, knockback, combo counter, spawn protection.
 - Server-authoritative: hit detection, cooldowns, combos and kit checks happen on the server (`ActionService`), with a request
@@ -155,7 +166,9 @@ src/
       CombatController inputs, aim, cooldowns, melee prediction, self-moving skills
       CombatFX       every combat effect (swings, projectiles, areas, domains, transformations, shattering)
       BeastFX        beast locomotion (trot / gallop / stride / flap / swim), idle, roar and attacks
-      CombatAnim     procedural R15 animations: every M1 combo step, skill casts, block guard
+      CombatAnim     procedural animation (R15, R6 fallback): M1 combos, skill motions, charges, dash, flip, fall,
+                     landing, broom seat, block guard
+      Cutscene       ultimate intros (transformation, domain): camera, letterbox, title, slow motion
       Overheads      gem title, rarity, name, HP and status over every fighter
     Aura/
       Auras          draws every player's aura, Inventory "try on" preview
